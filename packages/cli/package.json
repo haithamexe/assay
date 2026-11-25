@@ -2,6 +2,7 @@
   "name": "@assay/cli",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "The assay command.",
   "type": "module",
   "bin": {

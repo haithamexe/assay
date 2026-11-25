@@ -165,4 +165,4 @@ The `demo/` folder has the clickable demo the dashboard was built from (sample d
 
 ## About
 
-Assay (the working name: an assay tests the purity of metal) is an open-source project in early development. The look is the "Arcade, window on the desk" design system; its tokens live in this repository ([`demo/src/style.css`](demo/src/style.css)). The fonts (Geist, Geist Mono, Silkscreen) are under the SIL Open Font License, with their licences in [`packages/core/assets/fonts`](packages/core/assets/fonts).
+Assay (the working name: an assay tests the purity of metal) is an open-source project in early development, under the [MIT license](LICENSE). The look is the "Arcade, window on the desk" design system; its tokens live in this repository ([`demo/src/style.css`](demo/src/style.css)). The fonts (Geist, Geist Mono, Silkscreen) are under the SIL Open Font License, with their licences in [`packages/core/assets/fonts`](packages/core/assets/fonts).

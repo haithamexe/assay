@@ -2,6 +2,7 @@
   "name": "assay",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Evidence-first code review: free checks, blind reviewers, nothing counts without proof.",
   "type": "module",
   "workspaces": [

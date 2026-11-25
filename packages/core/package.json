@@ -2,6 +2,7 @@
   "name": "@assay/core",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "The engine: git facts, free checks, evidence, the gate, cases. Only Node, no dependencies.",
   "type": "module",
   "main": "dist/index.js",

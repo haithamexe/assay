@@ -6,6 +6,9 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Added
 
+**License**
+- Assay is under the MIT license ([LICENSE](LICENSE)); the repository is public, with GitHub's private vulnerability reporting switched on.
+
 **Calibration** (`assay calibrate`, the *Scoreboard* tab, [guide](docs/CALIBRATION.md))
 - Known bugs are planted in a **throwaway repository shaped like your project** (your languages, your folders; none of your code is copied and nothing in the project is touched), each with a clean twin written correctly. 18 kinds across JavaScript and TypeScript, Python, CSS, HTML and a manifest, whichever fit; the rest are listed as left out, with the reason.
 - **The free checks are scored on the spot, at no cost:** each bug is caught with proof, flagged, or missed, and every flag on a clean twin is one of Assay's own false alarms (there are none). Then your agent runs the reviewers on both cases, and each is scored on what it caught, missed and flagged in clean code, with tokens per catch (an estimate, unless the agent reports its use).

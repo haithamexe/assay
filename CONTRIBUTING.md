@@ -2,6 +2,8 @@
 
 Build it, test it, change a check, and the rules that keep it honest. Back to the [README](README.md). The principles and decisions are in the [charter](docs/PROJECT.md); read §2 and §3 before a big change.
 
+Assay is under the [MIT license](LICENSE); by contributing you agree your change is licensed the same way.
+
 ## Set up
 
 ```bash
