@@ -1,0 +1,25 @@
+{
+  "id": "tests",
+  "name": "Tests: what a change leaves behind",
+  "edition": "Assay starter",
+  "note": "Where tests belong and what counts as a change nothing is watching. Edit it, or add your own pack, to match how your team works.",
+  "on": true,
+  "rules": [
+    { "id": "test-focused", "name": "A focused test hides the rest", "ref": "Tests",
+      "sources": ["rule:test-focus"], "bad": "it.only('totals', …)", "good": "it('totals', …)" },
+    { "id": "test-skipped", "name": "A test is switched off", "ref": "Tests",
+      "sources": ["rule:test-skip"], "bad": "it.skip('totals', …)", "good": "fix it, or delete it and say why" },
+    { "id": "assertion-removed", "name": "An assertion was removed from a test", "ref": "Tests",
+      "sources": ["rule:assertion-removed"], "bad": "assert x == y   →   (nothing)", "good": "keep an assertion that checks the result" },
+    { "id": "logic-no-test", "name": "Logic changed and no test did", "ref": "Tests",
+      "sources": ["diff:no-test", "diff:production-path"], "bad": "40 lines of logic, no test file in the commit", "good": "a test that fails without the change" },
+    { "id": "tests-deleted", "name": "Tests were deleted", "ref": "Tests",
+      "sources": ["diff:test-deleted"], "bad": "orders.test.ts removed", "good": "moved, or replaced by something that checks the same" },
+    { "id": "test-regressed", "name": "A test that passed before now fails", "ref": "Tests · proof",
+      "sources": ["proof:tests", "proof:tests-output"], "bad": "green at the base, red at the head", "good": "green at both" },
+    { "id": "mutant-survives", "name": "A changed line nobody notices", "ref": "Tests · proof",
+      "sources": ["proof:mutation", "coverage:mutation"], "bad": "the tests pass with the new line flipped", "good": "a test pins the value" },
+    { "id": "revert-unnoticed", "name": "A risky change can be undone without a test noticing", "ref": "Tests · proof",
+      "sources": ["proof:revert", "coverage:revert"], "bad": "tests pass with the change put back as it was", "good": "a test that fails when it is put back" }
+  ]
+}

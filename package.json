@@ -1,0 +1,31 @@
+{
+  "name": "assay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evidence-first code review: free checks, blind reviewers, nothing counts without proof.",
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/cli",
+    "packages/mcp",
+    "packages/web"
+  ],
+  "scripts": {
+    "build": "tsc -b packages/core packages/cli packages/mcp packages/web",
+    "watch": "tsc -b -w packages/core packages/cli packages/mcp packages/web",
+    "clean": "tsc -b --clean packages/core packages/cli packages/mcp packages/web",
+    "test": "npm run build && node --test \"packages/core/dist/__tests__/*.test.js\" \"packages/cli/dist/__tests__/*.test.js\" \"packages/mcp/dist/__tests__/*.test.js\" \"packages/web/dist/__tests__/*.test.js\"",
+    "demo": "node demo/build.mjs",
+    "samples": "npm run build && node scripts/samples.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
+    "dashboard:demo": "npm run build && node scripts/demo-dashboard.mjs",
+    "check:public": "node scripts/check-public.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

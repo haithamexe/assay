@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Assay</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/dashboard.css" />
+    <script src="/js/theme.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="app">
+      <header class="sidebar">
+        <div class="brand" id="brand"></div>
+        <div class="project-switch">
+          <span class="project-switch-label">Project</span>
+          <div class="project-name" id="project"></div>
+        </div>
+        <button class="palette-open" type="button" data-act="palOpen" aria-keyshortcuts="Control+K Meta+K">Jump to… <kbd>Ctrl K</kbd></button>
+        <nav class="nav" id="nav" aria-label="Main"></nav>
+        <div class="sidebar-foot" id="foot"></div>
+      </header>
+      <main class="main" id="main" tabindex="-1"></main>
+    </div>
+    <div class="visually-hidden" id="live" role="status" aria-live="polite"></div>
+    <dialog id="pal" aria-label="Jump to">
+      <div class="dialog-body">
+        <input id="palq" class="input pal-input" placeholder="Jump to a page, a commit or an action" aria-label="Jump to" autocomplete="off" />
+        <ul class="pal-list" id="pallist"></ul>
+      </div>
+    </dialog>
+    <dialog id="brief" aria-labelledby="bt">
+      <div class="dialog-body">
+        <h2 class="dialog-title" id="bt">What the agent receives</h2>
+        <textarea id="brieftext" class="brief" readonly aria-label="Fix brief"></textarea>
+        <p class="dim" id="briefmeta"></p>
+        <div class="dialog-actions">
+          <button class="btn" data-act="closebrief">Close</button>
+          <button class="btn btn-primary" data-act="copybrief">Copy</button>
+        </div>
+      </div>
+    </dialog>
+    <script type="module" src="/js/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "id": "review-questions",
+  "name": "Review questions (starter)",
+  "edition": "Assay starter",
+  "note": "Things a machine can't decide, written as questions for whoever reviews: you, or an agent. Yours to edit: copy this file to your packs folder and change it.",
+  "on": true,
+  "rules": [
+    { "id": "money-float", "lens": "Correctness", "name": "Money is handled as a floating point number", "ref": "CWE-682",
+      "question": "Is money held as whole minor units (or a decimal type), never as a floating point number?", "bad": "total * 0.9", "good": "Decimal(total) * Decimal('0.9')" },
+    { "id": "no-timeout", "lens": "Performance", "name": "A network call has no timeout", "ref": "Reliability",
+      "question": "Does every new network call have a timeout, and what happens when it fires?", "bad": "await fetch(url)", "good": "fetch(url, { signal: AbortSignal.timeout(5000) })" },
+    { "id": "unbounded", "lens": "Performance", "name": "A loop or query has no bound", "ref": "Reliability",
+      "question": "What happens with no items, and with a hundred thousand? Is there a limit on every new loop, query and page size?" },
+    { "id": "time-zone", "lens": "Correctness", "name": "A date is parsed or shown without a time zone", "ref": "Correctness",
+      "question": "Is every new date parsed and shown with an explicit time zone?", "bad": "new Date(str)", "good": "parse with an explicit zone" },
+    { "id": "migration-drops", "lens": "Correctness", "name": "A migration drops something the last release still reads", "ref": "Releases",
+      "question": "Can the previous release still run against the new schema? Expand, migrate, then contract in a later release.", "bad": "ALTER TABLE … DROP COLUMN", "good": "expand, migrate, contract" },
+    { "id": "translation", "lens": "UI", "name": "Text won't survive translation or mirroring", "ref": "Layout",
+      "question": "Is every new piece of text translatable, and does the layout hold with text twice as long and right to left?" },
+    { "id": "half-done", "lens": "Correctness", "name": "A failure halfway leaves something half done", "ref": "Correctness",
+      "question": "If this fails halfway, is anything left half done: a partial write, a held lock, a temporary file?" },
+    { "id": "error-message", "lens": "UI", "name": "An error says nothing useful, or too much", "ref": "Writing",
+      "question": "Does an error tell the person what to do next, without leaking internals or secrets?" },
+    { "id": "unsafe-default", "lens": "Security", "name": "A new setting defaults to the unsafe choice", "ref": "Design",
+      "question": "Is a new setting or flag documented, and is its default the safe one?" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "basics",
+  "name": "Basics",
+  "edition": "Assay starter",
+  "note": "Things worth catching on every change.",
+  "on": true,
+  "rules": [
+    { "id": "secret-committed", "name": "A key, token or password was committed", "ref": "CWE-798",
+      "sources": ["fact:*", "rule:generic-secret", "rule:aws-key", "rule:github-token", "rule:slack-token", "rule:private-key", "rule:google-key", "rule:stripe-live", "rule:npm-token", "rule:url-credentials"],
+      "bad": "const key = 'sk_live_…'", "good": "read it from the environment, and rotate the one that leaked" },
+    { "id": "types-off", "name": "Type checking is switched off here", "ref": "Correctness",
+      "sources": ["rule:ts-suppress"], "langs": ["TypeScript", "JavaScript"], "bad": "// @ts-ignore", "good": "fix the type, or narrow it with a comment that says why" }
+  ]
+}

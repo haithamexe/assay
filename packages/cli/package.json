@@ -1,0 +1,14 @@
+{
+  "name": "@assay/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The assay command.",
+  "type": "module",
+  "bin": {
+    "assay": "dist/index.js"
+  },
+  "dependencies": {
+    "@assay/core": "*",
+    "@assay/web": "*"
+  }
+}

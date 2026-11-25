@@ -1,0 +1,18 @@
+{
+  "name": "@assay/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The dashboard: the demo's screens on real cases. node:http on the loopback address, a token and a strict CSP. No dependencies but the core.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "public"],
+  "dependencies": { "@assay/core": "*" }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "pages",
+  "name": "Pages that render and work",
+  "edition": "Assay starter",
+  "note": "What opening the page in a real browser, at the base and at the head, can measure in 8 combinations: desktop and phone, light and dark, as loaded and mirrored right to left.",
+  "on": true,
+  "rules": [
+    { "id": "physical-side", "name": "A physical side is used where the layout may need to mirror", "ref": "Layout",
+      "sources": ["rule:physical-css-side"], "langs": ["CSS", "Vue", "Svelte", "HTML"], "bad": "right: 12px", "good": "inset-inline-end: 12px" },
+    { "id": "overlap", "name": "Things overlap", "ref": "Measured",
+      "sources": ["browser:overlap"], "langs": ["CSS"], "bad": "two boxes share the same pixels", "good": "room for both, in both directions" },
+    { "id": "clip", "name": "Text is cut off", "ref": "Measured",
+      "sources": ["browser:clip"], "langs": ["CSS"], "bad": "width: 148px on a button that holds text", "good": "min-width: 148px" },
+    { "id": "blank", "name": "The page shows nothing", "ref": "Measured",
+      "sources": ["browser:blank"], "bad": "an empty page", "good": "the content, or a message that says why not" },
+    { "id": "exception", "name": "The page throws an uncaught error", "ref": "Console",
+      "sources": ["browser:exception"], "bad": "TypeError: undefined is not a function", "good": "no uncaught error on load" },
+    { "id": "console-error", "name": "The page logs an error", "ref": "Console",
+      "sources": ["browser:console"], "bad": "console.error on load", "good": "a quiet console on load" },
+    { "id": "network", "name": "A request from the page fails", "ref": "Network",
+      "sources": ["browser:network"], "bad": "404 /api/cart", "good": "every request the page makes succeeds" }
+  ]
+}

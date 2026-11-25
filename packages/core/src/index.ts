@@ -1,0 +1,40 @@
+export * from './types.js';
+export { assayHome, assayPath, cap, writeFileAtomic } from './config.js';
+export { GitError, git, repoRoot, resolveRev } from './git.js';
+export { parseDiff, commitDiff } from './diff.js';
+export { isProof, tierOf, PROOF_KINDS } from './evidence.js';
+export { maskSecret, redactSecrets } from './checks/secrets.js';
+export { nearestName } from './checks/deps.js';
+export { riskOf, commitRisk } from './risk.js';
+export { analyzeCommit, ANALYSIS_VERSION } from './analysis.js';
+export { applyClaims } from './gate.js';
+export { openCase, resolveRange, verdictOf, resolveFinding, timeline, branchSpan, findingState, findingById, isOpen, caseId } from './case.js';
+export type { FindingState, TimelineRow } from './case.js';
+export { saveCase, loadCase, listCases } from './store.js';
+export { commitInfo, repoName } from './git.js';
+export { doctor } from './doctor.js';
+export type { DoctorRow } from './doctor.js';
+export { assetsDir } from './report.js';
+export { Browser } from './browser/cdp.js';
+export { briefOf } from './brief.js';
+export { replayEvidence } from './replay.js';
+export { reportHTML } from './report.js';
+export { proveCase, replayRun } from './proof/prove.js';
+export type { ProofReport, ProveOptions } from './proof/prove.js';
+export { repoSettings, setRepoSettings, isAllowed } from './proof/settings.js';
+export type { RepoSettings } from './proof/settings.js';
+export { detectCommand } from './proof/runner.js';
+export type { TestCommand } from './proof/runner.js';
+export { languageOf } from './lang.js';
+export type { ReplayResult } from './replay.js';
+export type { OpenOptions, RangeSpec } from './case.js';
+export { lookCase, replayLook, scanRange } from './browser/look.js';
+export type { LookReport, LookOptions } from './browser/look.js';
+export { findBrowser } from './browser/find.js';
+/** What Assay remembers: standards packs, mistakes (standard and learned), their stats, and learning from history. */
+export * as memory from './memory/index.js';
+/** The reviewer panel: who is worth their tokens, what each is handed, what comes back through the gate, and the Stop hook. Assay never calls a model. */
+export * as reviewers from './reviewers/index.js';
+export { reviewBudget, DEFAULT_BUDGET } from './proof/settings.js';
+/** Calibration: plant known bugs in a throwaway repository, score the free checks and the reviewers against the truth, and leave out a reviewer that doesn't earn its tokens. */
+export * as calibration from './calibration/index.js';

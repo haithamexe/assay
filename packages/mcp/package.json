@@ -1,0 +1,13 @@
+{
+  "name": "@assay/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server: lets an agent open cases, read ranked findings and submit evidence-gated claims.",
+  "type": "module",
+  "bin": { "assay-mcp": "dist/index.js" },
+  "dependencies": {
+    "@assay/core": "*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  }
+}
