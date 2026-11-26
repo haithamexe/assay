@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { plantedRepo, SECRET, tempHome } from './fixtures.js';
@@ -173,4 +174,12 @@ test('ranges: default, a single commit, and refusing anything that looks like an
   assert.throws(() => core.resolveRange(repo.dir, `${hashes[1]}..--exec=x`), /not a commit/);
   assert.throws(() => core.resolveRange(repo.dir, 'nope'), /not a commit/);
   assert.throws(() => core.openCase({ repo: repo.dir, range: FULL, max: 2 }), /limit is 2/);
+});
+
+test('one folder is one repository however it is spelled: a link to it, or the name git reports, has the same key', async () => {
+  const { repoKey } = await import('../git.js');
+  const via = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'assay-link-')), 'via-link');
+  fs.symlinkSync(repo.dir, via, process.platform === 'win32' ? 'junction' : 'dir'); // macOS keeps /var behind a link; Windows temp folders have 8.3 names
+  assert.equal(repoKey(via), repoKey(repo.dir));
+  assert.equal(repoKey(core.repoRoot(via)), repoKey(via));
 });

@@ -55,8 +55,10 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 - The browser checks keep, on each picture, the boxes of what was measured there and was not there at the base.
 - The timeline rows say which lenses their findings are about; `branchSpan`, `findingState`, `openCase({ span })` and a shared `doctor`.
 - Fixed: a failed dev server left its headless browser running until the process ended.
+- Fixed (found by the first CI run): **a folder is one repository however it is spelled.** The key behind allow-run, memory, caches and calibration comes from the real folder, so a folder reached through a link (macOS keeps `/var` and `/tmp` behind one) or by a Windows 8.3 short name is no longer taken for a second repository, one that was never allowed to run anything and had no memory.
+- Fixed (found by the same run): two calibration runs started in the same second got the same commits and so the same cases, with the first run's reports in the second. Each run now has its own.
 
-25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
+25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), plus 2 for the fixes above (155), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
 
 ### Not built yet
 

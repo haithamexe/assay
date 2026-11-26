@@ -1,4 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { sha } from './config.js';
 
@@ -98,9 +99,14 @@ export function defaultBase(repo: string, head: string): string | null {
   return null;
 }
 
+/** The folder as the file system itself names it: no symlinks (macOS keeps /var and /tmp behind one) and no Windows 8.3 short names (a temp folder often has them). Git reports the real name, so two spellings of one folder must not become two repositories. */
+const realFolder = (p: string): string => {
+  try { return fs.realpathSync.native(p); } catch { return p; }
+};
+
 /** A repository's key in Assay's own folders. Paths are case-insensitive on Windows and (by default) macOS, so there they are lower-cased; on Linux two folders that differ only by case are two repositories. */
 export const repoKey = (repo: string): string => {
-  const p = path.resolve(repo);
+  const p = realFolder(path.resolve(repo));
   return sha(process.platform === 'win32' || process.platform === 'darwin' ? p.toLowerCase() : p, 10);
 };
 export const repoName = (repo: string): string => path.basename(repo);

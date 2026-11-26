@@ -211,3 +211,20 @@ test('old throwaway repositories are cleaned, what they showed is kept, and a ru
   assert.equal(cal.loadRun('../../etc'), null, 'a run id is only ever its fixed shape, so it can name no other folder');
   assert.equal(cal.loadRun('cal-00000000'), null);
 });
+
+test('two runs started in the same second are two runs, each with its own cases', () => {
+  const p = project();
+  // A fixed clock makes "the same second" certain: without a run id in the commits, the two runs would get the same hashes and so the same cases.
+  const was = [process.env.GIT_AUTHOR_DATE, process.env.GIT_COMMITTER_DATE];
+  process.env.GIT_AUTHOR_DATE = process.env.GIT_COMMITTER_DATE = '2025-06-01T10:00:00Z';
+  try {
+    const a = cal.startCalibration(p.dir);
+    const b = cal.startCalibration(p.dir);
+    assert.notEqual(a.planted.head, b.planted.head);
+    assert.notEqual(a.planted.case, b.planted.case, 'the planted cases differ');
+    assert.notEqual(a.control.case, b.control.case, 'the clean twins differ');
+  } finally {
+    if (was[0] === undefined) delete process.env.GIT_AUTHOR_DATE; else process.env.GIT_AUTHOR_DATE = was[0];
+    if (was[1] === undefined) delete process.env.GIT_COMMITTER_DATE; else process.env.GIT_COMMITTER_DATE = was[1];
+  }
+});

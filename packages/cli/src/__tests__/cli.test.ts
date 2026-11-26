@@ -157,7 +157,7 @@ bt('look is refused until allowed, then opens the pages in a real browser and fi
   assert.match(allowed.out, /Dev server/);
   const r = runWeb('look', `${webBase}..HEAD`, '--no-probe');
   assert.equal(r.code, 0, r.err);
-  assert.match(r.out, /Browser\s+\S+ · the HTML files as they are/);
+  assert.match(r.out, /Browser\s+[^\n·]+ · the HTML files as they are/); // a browser's name can have spaces ("Google Chrome")
   assert.match(r.out, /new problems\s+1 measured at the head/);
   assert.match(r.out, /Things overlap on \/ when mirrored \(right to left\)/);
   assert.match(r.out, /look different/);

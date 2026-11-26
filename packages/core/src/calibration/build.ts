@@ -101,7 +101,9 @@ export function startCalibration(repoIn: string, opts: { budget?: number } = {})
   write(dir, 'README.md', '# app\n');
   for (const p of planned) if (p.base !== undefined) write(dir, p.path, p.base);
   g('add', '-A');
-  g('commit', '-q', '-m', 'Initial files');
+  // A case is named after its commits' hashes, and these commits have a fixed author and are made at "now": two runs in the same second would get
+  // the same hashes, and so the same case (with the earlier run's reports in it). The run id in the base commit's message makes every run its own.
+  g('commit', '-q', '-m', 'Initial files', '-m', `Calibration run ${id}`);
   const base = g('rev-parse', 'HEAD').trim();
   const message = 'Add helpers';
 
