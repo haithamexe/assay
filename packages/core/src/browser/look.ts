@@ -11,7 +11,7 @@ import { saveCase } from '../store.js';
 import type { Case, Evidence, Finding, Lens, RunRecord, Severity, ShotRecord } from '../types.js';
 import { Browser, type Page } from './cdp.js';
 import { findBrowser } from './find.js';
-import { DIFF_SRC, INSPECT_SRC, PROBE_NAMES_SRC, probeTypeSrc, type InPageProblem, type InspectResult } from './inspect.js';
+import { ARABIC_RESTORE_SRC, ARABIC_SRC, DIFF_SRC, INSPECT_SRC, PROBE_NAMES_SRC, probeTypeSrc, type InPageProblem, type InspectResult } from './inspect.js';
 import { devServer, staticServer, type Served } from './serve.js';
 
 export interface LookOptions {
@@ -48,12 +48,12 @@ export interface LookReport {
 
 const VIEWPORTS = [{ id: 'desktop', label: 'desktop', w: 1280, h: 800, mobile: false }, { id: 'phone', label: 'phone', w: 390, h: 844, mobile: true }] as const;
 const SCHEMES = ['light', 'dark'] as const;
-const DIRS = [{ id: 'native', label: 'as loaded' }, { id: 'rtl', label: 'mirrored (right to left)' }] as const;
+const DIRS = [{ id: 'native', label: 'as loaded' }, { id: 'rtl', label: 'mirrored (right to left)' }, { id: 'ar', label: 'with Arabic text (mirrored, the text swapped for longer Arabic)' }] as const;
 /** Share of pixels that must change for a picture to count as different: about 100 pixels of a desktop screen, so a small shift counts and rendering noise doesn't. */
 export const SHOT_DIFFERENT = 0.0001;
 const PAYLOAD = '"\'><assay-probe data-assay></assay-probe>';
 export const COMBOS = VIEWPORTS.length * SCHEMES.length * DIRS.length;
-const comboLabel = (id: string): string => { const [v, s, d] = id.split('|'); return `${v}, ${s} scheme, ${d === 'rtl' ? 'mirrored' : 'as loaded'}`; };
+const comboLabel = (id: string): string => { const [v, s, d] = id.split('|'); return `${v}, ${s} scheme, ${d === 'rtl' ? 'mirrored' : d === 'ar' ? 'with Arabic text' : 'as loaded'}`; };
 
 interface Problem extends InPageProblem { combo: string; key: string }
 interface ProbeHit { kind: 'param' | 'input'; name: string; key: string }
@@ -111,11 +111,13 @@ async function scanPage(browser: Browser, origin: string, pagePath: string, o: {
         for (const dir of DIRS) {
           const id = `${vp.id}|${scheme}|${dir.id}`;
           if (dir.id === 'rtl') await p.evaluate("(function(){var d=document.documentElement;window.__assayDir=d.getAttribute('dir');d.setAttribute('dir','rtl');})()");
+          if (dir.id === 'ar') await p.evaluate(ARABIC_SRC);
           const r = await p.evaluate<InspectResult>(INSPECT_SRC);
           for (const pr of r.problems) scan.problems.push({ ...pr, combo: id, key: `${pr.kind}|${pr.path}` });
           // before and after pictures: as loaded on both sizes, and mirrored on desktop (a mirrored-layout bug looks identical as loaded)
           if (o.screens && scheme === 'light' && (dir.id === 'native' || vp.id === 'desktop')) shots.set(id, await p.screenshot());
           if (dir.id === 'rtl') await p.evaluate("(function(){var d=document.documentElement;if(window.__assayDir===null)d.removeAttribute('dir');else d.setAttribute('dir',window.__assayDir);})()");
+          if (dir.id === 'ar') await p.evaluate(ARABIC_RESTORE_SRC);
         }
       }
     }
@@ -287,7 +289,7 @@ export async function lookCase(c: Case, opts: LookOptions = {}): Promise<LookRep
     const b7 = c.base ? c.base.slice(0, 7) : 'the start';
     const rec: RunRecord = { id: `r-${sha([c.head, 'browser', report.pages.join(',')].join('\0'), 8)}`, kind: 'browser', at: new Date().toISOString(), secs: report.secs, command: `${report.browser} (${report.mode})`, summary: '', findings: [], signals: [], shots: [] };
     const make = (raw: RawFinding): Finding => buildFinding(raw, { commit: c.head, files: net }, 'run');
-    const push = (kind: string, page: string, items: Array<{ key: string; combo?: string; detail: string; tokens?: string[] }>, newPage: boolean, rtlOnly: boolean, proofKind: 'measurement' | 'probe'): void => {
+    const push = (kind: string, page: string, items: Array<{ key: string; combo?: string; detail: string; tokens?: string[] }>, newPage: boolean, rtlOnly: boolean, proofKind: 'measurement' | 'probe', arabicOnly = false): void => {
       const meta = KINDS[kind];
       const a = anchorUi(net, items.flatMap(i => i.tokens ?? []), proofKind === 'probe');
       if (!a) return;
@@ -297,7 +299,7 @@ export async function lookCase(c: Case, opts: LookOptions = {}): Promise<LookRep
         run: { kind: 'look' as const, file: page, op: i.key }
       }));
       rec.findings.push(make({
-        check: 'browser', key: `${kind}:${page}`, title: `${proofKind === 'probe' ? 'Text typed into the page becomes markup' : meta.title}${proofKind === 'probe' ? '' : ` on ${page}`}${rtlOnly ? ' when mirrored (right to left)' : ''}`,
+        check: 'browser', key: `${kind}:${page}`, title: `${proofKind === 'probe' ? 'Text typed into the page becomes markup' : meta.title}${proofKind === 'probe' ? '' : ` on ${page}`}${arabicOnly ? ' with Arabic text' : rtlOnly ? ' when mirrored (right to left)' : ''}`,
         lens: proofKind === 'probe' ? 'Security' : meta.lens, severity: proofKind === 'probe' ? 'high' : meta.sev, file: a.file.path, line: a.line, side: 'added', text: a.text, evidence,
         observed: [`Measured in a real browser: ${items.length} ${items.length === 1 ? 'case' : 'cases'} on ${page}${newPage ? '' : `, none at ${b7}`}.`, ...items.slice(0, 3).map(i => `${i.combo ? `${comboLabel(i.combo)}: ` : ''}${i.detail}.`)],
         inferred: [proofKind === 'probe' ? 'Anyone who can get a person to open a crafted link, or to paste text into the field, can run script in their session.' : meta.maybe],
@@ -319,8 +321,10 @@ export async function lookCase(c: Case, opts: LookOptions = {}): Promise<LookRep
         const byKey = new Map<string, Problem[]>();
         for (const p of group) byKey.set(p.key, [...(byKey.get(p.key) ?? []), p]);
         const items = [...byKey.values()].map(ps => ({ key: ps[0].key, combo: ps[0].combo, detail: ps[0].detail, tokens: ps[0].tokens }));
-        const rtlOnly = group.every(p => p.combo.endsWith('|rtl')) && hp.problems.every(p => p.kind !== kind || p.combo.endsWith('|rtl') || baseKeys.has(`${p.combo}|${p.key}`));
-        push(kind, hp.path, items, newPage, rtlOnly, 'measurement');
+        const mirrored = (combo: string): boolean => combo.endsWith('|rtl') || combo.endsWith('|ar');
+        const rtlOnly = group.every(p => mirrored(p.combo)) && hp.problems.every(p => p.kind !== kind || mirrored(p.combo) || baseKeys.has(`${p.combo}|${p.key}`));
+        const arabicOnly = group.every(p => p.combo.endsWith('|ar')) && hp.problems.every(p => p.kind !== kind || p.combo.endsWith('|ar') || baseKeys.has(`${p.combo}|${p.key}`));
+        push(kind, hp.path, items, newPage, rtlOnly, 'measurement', arabicOnly);
       }
       const events = (name: 'exception' | 'console' | 'network', now: string[], before: string[] | undefined): void => {
         const nw = now.filter(m => !(before ?? []).includes(m));

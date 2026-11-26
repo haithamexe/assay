@@ -91,7 +91,7 @@ Cases are kept (`assay cases`), and reopening one keeps your resolutions and eve
 
 ## Browser checks, in detail
 
-`assay look` serves the checkout (a small static server for HTML files, or the project's own dev server), launches a Chromium-based browser through its own pipe, and opens each page at the head and at the base. For each page it loads four times (desktop and phone, light and dark) and measures each load as loaded and again with the page's `dir` forced to `rtl`: 8 combinations.
+`assay look` serves the checkout (a small static server for HTML files, or the project's own dev server), launches a Chromium-based browser through its own pipe, and opens each page at the head and at the base. For each page it loads four times (desktop and phone, light and dark) and measures each load three ways: as loaded, with the page's `dir` forced to `rtl`, and with Arabic text (the page mirrored, `lang="ar"`, and its own text swapped for real Arabic letters about 30% longer, so a box sized for English words meets text that is not): 12 combinations. The swap is made at the base and at the head, so only what the change added counts, and a problem seen only with Arabic text says so. It is pseudo-localisation, not a translation.
 
 **Everything is differential**: a problem counts only if the same page, in the same combination, did not have it at the base. That is what makes "two things overlap" safe to report. A page that is new at the head skips the noisy kinds (overlap, accessibility basics) and keeps the rest.
 

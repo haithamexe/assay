@@ -6,7 +6,7 @@ import { html, ico, short } from './lib.js';
 
 const VIEWPORT = { desktop: [1280, 800], phone: [390, 844] };
 const SAME = 0.0001;
-const ORDER = ['desktop|light|native', 'desktop|light|rtl', 'phone|light|native'];
+const ORDER = ['desktop|light|native', 'desktop|light|rtl', 'desktop|light|ar', 'phone|light|native'];
 
 /** The pictures that belong to a finding: those of the pages its evidence is about. */
 export function shotsFor(view, f) {
@@ -24,7 +24,7 @@ export function kindsOf(f) {
 
 const label = s => {
   const [vp, scheme, dir] = s.combo.split('|');
-  return `${vp === 'phone' ? 'Phone' : 'Desktop'} · ${dir === 'rtl' ? 'mirrored' : 'as loaded'}${scheme === 'dark' ? ' · dark' : ''}`;
+  return `${vp === 'phone' ? 'Phone' : 'Desktop'} · ${dir === 'rtl' ? 'mirrored' : dir === 'ar' ? 'with Arabic text' : 'as loaded'}${scheme === 'dark' ? ' · dark' : ''}`;
 };
 const url = (caseId, name) => `/api/shot?case=${encodeURIComponent(caseId)}&name=${encodeURIComponent(name)}`;
 const pct = (n, d) => Math.max(0, Math.min(100, Math.round((n / d) * 10000) / 100));

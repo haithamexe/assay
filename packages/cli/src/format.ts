@@ -64,7 +64,7 @@ export function proofText(r: ProofReport): string {
 export function lookText(r: LookReport): string {
   if (!r.ran) return `${bold('Browser')}  ${r.reason ?? 'nothing ran'}`;
   const l: string[] = [`${bold('Browser')}  ${r.browser} · ${r.mode === 'dev' ? 'the project’s dev server' : 'the HTML files as they are'}  ${dim(`${r.secs} s`)}`];
-  l.push(`  looked at   ${r.pages.join(', ')}  ${dim(`(${r.combos} combinations of size, colour scheme and direction, at the head and at the base)`)}`);
+  l.push(`  looked at   ${r.pages.join(', ')}  ${dim(`(${r.combos} combinations of size, colour scheme, direction and Arabic text, at the head and at the base)`)}`);
   l.push(`  ${r.newProblems ? red('new problems') : green('new problems')}  ${r.newProblems} measured at the head that weren't there at the base`);
   if (r.probeHits) l.push(`  ${red('probe')}        ${r.probeHits} place${r.probeHits > 1 ? 's' : ''} where typed text became markup`);
   if (r.looksDifferent) l.push(`  looks       ${r.looksDifferent} page${r.looksDifferent > 1 ? 's' : ''} look different (before and after screenshots are in the report: assay report --open)`);

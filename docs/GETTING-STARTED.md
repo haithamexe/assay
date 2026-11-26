@@ -116,7 +116,7 @@ Results are cached by commit, command and change, so running it again is instant
 assay look
 ```
 
-For a plain HTML project, Assay serves the files itself (the HTML files your range changed, or `index.html`). For anything with a dev server, it starts it from `package.json` (`dev` or `start`) or from `--serve`. Then it opens each page at the base and at the head, in 8 combinations, and reports only what is new at the head.
+For a plain HTML project, Assay serves the files itself (the HTML files your range changed, or `index.html`). For anything with a dev server, it starts it from `package.json` (`dev` or `start`) or from `--serve`. Then it opens each page at the base and at the head, in 12 combinations (two sizes, light and dark, as loaded, mirrored, and with Arabic text), and reports only what is new at the head.
 
 It also types a harmless marker into the page's fields and query string to see whether text can become markup. It never submits a form. Skip that with `--no-probe`, and skip the pictures with `--no-screens`.
 

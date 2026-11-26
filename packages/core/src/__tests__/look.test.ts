@@ -43,7 +43,7 @@ t('layout problems that appear only at the head are measured in a real browser, 
   assert.equal(report.ran, true, report.reason);
   assert.equal(report.mode, 'static');
   assert.deepEqual(report.pages, ['/']);
-  assert.equal(report.combos, 8);
+  assert.equal(report.combos, 12, 'two sizes, two colour schemes, and as loaded, mirrored and with Arabic text');
 
   const found = (re: RegExp) => c.findings.find(f => f.origin === 'run' && f.check === 'browser' && re.test(f.title));
   const overlap = found(/Things overlap/)!;
@@ -71,7 +71,7 @@ t('layout problems that appear only at the head are measured in a real browser, 
 
   // before and after, with the share of pixels that changed
   const rec = c.runs.find(r => r.kind === 'browser')!;
-  assert.equal(rec.shots?.length, 3, 'as loaded on desktop and phone, and mirrored on desktop');
+  assert.equal(rec.shots?.length, 4, 'as loaded on desktop and phone, mirrored on desktop, and with Arabic text on desktop');
   const mirrored = rec.shots!.find(s => s.combo.endsWith('|rtl'))!;
   assert.ok(mirrored.changed >= 0.0001, `the mirrored page looks different: ${mirrored.changed}`);
 
@@ -184,4 +184,49 @@ test('without a browser the answer says how to fix that', async () => {
     assert.equal(r.ran, false);
     assert.match(r.reason ?? '', /allow-run --browser/);
   } finally { process.env.PATH = path; if (saved) process.env.ASSAY_BROWSER = saved; }
+});
+
+const AR_INDEX = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pay</title><link rel="stylesheet" href="style.css"></head>
+<body><main><h1>Checkout</h1><p class="note">Your total is 24.00</p><button id="pay" class="pay">Place order now</button></main>
+<script>
+// the button is as wide as its English label (plus two pixels), the way a box sized for the words you have looks
+var b = document.getElementById('pay');
+var s = document.createElement('span');
+s.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:' + getComputedStyle(b).font;
+s.textContent = b.textContent;
+document.body.appendChild(s);
+b.style.width = (Math.ceil(s.getBoundingClientRect().width) + 2) + 'px';
+s.remove();
+</script></body></html>
+`;
+const AR_CSS_BASE = 'body{font:16px system-ui;margin:16px}\n.pay{padding:0;min-height:44px;font:600 14px system-ui}\n';
+const AR_CSS_HEAD = AR_CSS_BASE.replace('.pay{padding:0;', '.pay{padding:0;overflow:hidden;white-space:nowrap;');
+
+t('text that fits in English and not in Arabic is found, and the finding says it is the Arabic text that does it', async () => {
+  const repo = makeRepo();
+  const base = repo.commit({ 'index.html': AR_INDEX, 'style.css': AR_CSS_BASE }, 'Base');
+  const head = repo.commit({ 'style.css': AR_CSS_HEAD }, 'Keep the pay button on one line');
+  core.setRepoSettings(repo.dir, { allow: true });
+  const c = core.openCase({ repo: repo.dir, range: `${base}..${head}` });
+  const report = await core.lookCase(c, { probe: false, screens: false });
+  assert.equal(report.ran, true, report.reason);
+  const clip = c.findings.find(f => f.origin === 'run' && f.check === 'browser' && /Text is cut off/.test(f.title))!;
+  assert.ok(clip, c.findings.map(f => f.title).join(' | '));
+  assert.match(clip.title, /with Arabic text$/, 'English fits: it is the longer Arabic text that is cut off');
+  assert.equal(clip.tier, 'proven');
+  assert.ok(clip.evidence.every(e => /with Arabic text/.test(e.what)), clip.evidence.map(e => e.what).join(' | '));
+  assert.equal(clip.file, 'style.css');
+  assert.ok(clip.snippet.rows.some(r => r.sig && /overflow:hidden/.test(r.text)), 'anchored on the line that made it');
+  // and it replays: the same swap, at both ends
+  const r = await core.replayEvidence(core.openCase({ repo: repo.dir, range: `${base}..${head}` }), clip.evidence[0].id);
+  assert.equal(r.reproduced, true, r.detail);
+
+  // the same page with a box that has room is clean, in English and in Arabic
+  const roomy = makeRepo();
+  const b2 = roomy.commit({ 'index.html': AR_INDEX, 'style.css': AR_CSS_BASE }, 'Base');
+  const h2 = roomy.commit({ 'style.css': AR_CSS_BASE.replace('.pay{padding:0;', '.pay{padding:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;') }, 'Ellipsis, which says it is cut');
+  core.setRepoSettings(roomy.dir, { allow: true });
+  const c2 = core.openCase({ repo: roomy.dir, range: `${b2}..${h2}` });
+  await core.lookCase(c2, { probe: false, screens: false });
+  assert.ok(!c2.findings.some(f => f.origin === 'run' && f.check === 'browser' && /Text is cut off/.test(f.title)), 'text-overflow: ellipsis says the text is shortened on purpose');
 });

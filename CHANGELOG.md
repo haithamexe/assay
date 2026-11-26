@@ -6,6 +6,10 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Added
 
+**Arabic text in the browser checks** (`assay look`, MCP `look`)
+- A twelfth combination (on both sizes and both colour schemes): the page is mirrored, set to `lang="ar"`, and its own text is swapped for real Arabic letters about 30% longer, so the browser shapes them and falls back to an Arabic font as it would for a translation. Mirroring alone never met a box sized for English words. The same swap is made at the base and at the head, so only what the change added counts, and a problem seen only here says so ("… with Arabic text").
+- It is pseudo-localisation, not a translation. A desktop picture is kept for it on the before-and-after screen.
+
 **Mutation reads each file in its own language**
 - The deliberate changes `assay prove` makes to see whether the tests notice used one set of operators and one idea of a string for every language. Now each file is read as its own language: `===` only in JavaScript, `and`, `or`, `not`, `is None` and `True` in Python, `if !ok {` with no parentheses in Go and Rust, a Rust lifetime is not a string, a `#` is a comment in Python and an attribute in Rust, and SQL is not mutated.
 - A comment, the inside of a string, a block comment or a docstring, an import, an annotation, a `+` that joins text and an array length are never mutated, so fewer runs are wasted on changes that don't compile.

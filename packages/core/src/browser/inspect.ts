@@ -200,3 +200,42 @@ export const DIFF_SRC = String.raw`(async function (a, b) {
   ox.putImageData(od, 0, 0);
   return { ratio: changed / (w * h), box: changed ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } : null, diff: out.toDataURL('image/jpeg', 0.8), base: pa.c.toDataURL('image/jpeg', 0.72), head: pb.c.toDataURL('image/jpeg', 0.72) };
 })`;
+
+/**
+ * Pseudo-localisation into Arabic (D57): the page's own text is swapped for Arabic letters about 30% longer, the page is mirrored (dir="rtl", lang="ar"),
+ * and the page is then measured like any other. Real Arabic letters, so the browser shapes and joins them and falls back to an Arabic font, as a real
+ * translation would: what breaks is a box sized for the English words, a line height that clips tall glyphs, a label that no longer fits. It is not a
+ * translation and doesn't pretend to be: the same swap is made at the base and at the head, so only what the change added counts. Scripts, styles, code
+ * and form fields are left alone, digits and punctuation stay, and the text is not put back (the page is loaded again for the next combination).
+ */
+export const ARABIC_SRC = String.raw`(function () {
+  var d = document.documentElement;
+  window.__assayDir = d.getAttribute('dir');
+  window.__assayLang = d.getAttribute('lang');
+  d.setAttribute('dir', 'rtl');
+  d.setAttribute('lang', 'ar');
+  var letters = [];
+  for (var c = 0x628; c <= 0x63a; c++) letters.push(String.fromCharCode(c));
+  for (var e = 0x641; e <= 0x64a; e++) letters.push(String.fromCharCode(e));
+  function word(w) {
+    var n = Math.ceil(w.length * 1.3), s = '';
+    for (var i = 0; i < n; i++) s += letters[(w.charCodeAt(i % w.length) + i * 7) % letters.length];
+    return s;
+  }
+  var skip = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1, CODE: 1, PRE: 1, SVG: 1, TITLE: 1 };
+  var walker = document.createTreeWalker(document.body || d, NodeFilter.SHOW_TEXT);
+  var nodes = [], n;
+  while ((n = walker.nextNode())) {
+    var p = n.parentNode;
+    if (p && !skip[String(p.nodeName).toUpperCase()] && /[A-Za-z]/.test(n.nodeValue)) nodes.push(n);
+  }
+  nodes.forEach(function (t) { t.nodeValue = t.nodeValue.replace(/[A-Za-z]+/g, word); });
+  var fields = document.querySelectorAll('input[placeholder], textarea[placeholder]');
+  Array.prototype.forEach.call(fields, function (f) { f.setAttribute('placeholder', f.getAttribute('placeholder').replace(/[A-Za-z]+/g, word)); });
+  return nodes.length;
+})()`;
+export const ARABIC_RESTORE_SRC = String.raw`(function () {
+  var d = document.documentElement;
+  if (window.__assayDir === null) d.removeAttribute('dir'); else d.setAttribute('dir', window.__assayDir);
+  if (window.__assayLang === null) d.removeAttribute('lang'); else d.setAttribute('lang', window.__assayLang);
+})()`;
