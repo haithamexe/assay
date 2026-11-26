@@ -123,6 +123,7 @@ test('prove runs the project’s tests at base and head and blocks on the regres
   assert.match(r.out, /regression\s+add adds two numbers/);
   assert.match(r.out, /Blocked: 1 proven problem/);
   assert.match(r.out, /Tests that passed before this range now fail/);
+  assert.match(r.out, /behaviour\s+1 function compared before and after, 1 answers differently/, 'the function that changed answers differently');
   assert.match(r.out, /first fail\s+[0-9a-f]{7} “Refactor add”\s+\(passed at [0-9a-f]{7}; found with 1 run of 2 commits\)/, 'it names the commit that broke the tests');
   const again = runProj('prove', `${baseSha}..HEAD`, '--no-mutation', '--no-revert');
   assert.match(again.out, /from the cache/);

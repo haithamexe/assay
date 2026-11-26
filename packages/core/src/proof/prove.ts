@@ -5,12 +5,13 @@ import type { RawFinding } from '../checks/types.js';
 import { redactSecrets } from '../checks/secrets.js';
 import { sha } from '../config.js';
 import { commitDiff, type FileDiff, type Hunk } from '../diff.js';
-import { commitInfo, firstParentChain, resolveRev } from '../git.js';
-import { isSourcePath } from '../lang.js';
+import { commitInfo, firstParentChain, resolveRev, showFile } from '../git.js';
+import { isSourcePath, isTestPath } from '../lang.js';
 import { saveCase } from '../store.js';
 import type { Case, Evidence, Finding, RunRecord, Severity } from '../types.js';
 import { applyRuns } from './apply.js';
 import { searchFirstBad, type Judged } from './bisect.js';
+import { callText, candidates, differences, inputsFor, langOf, runFunction, type Fn } from './behave.js';
 import { applyMutant, mutantsFor, pickMutants, revertHunk, type Mutant } from './mutate.js';
 import { showedFailure } from './parse.js';
 import { cacheRun, cachedRun, detectCommand, runCommand, type RunResult, type TestCommand } from './runner.js';
@@ -26,6 +27,8 @@ export interface ProveOptions {
   budgetSeconds?: number;
   /** When tests that passed at the base fail at the head, find the first commit in the range where they fail (at most log2 of the commits, each run cached). Default true. */
   bisect?: boolean;
+  /** Compare the functions the range changed, before and after, on the same inputs (D53). JavaScript and Python only. Default true. */
+  behaviour?: boolean;
   /** Run again even where a result is cached. */
   fresh?: boolean;
   /** Stop: the run in progress is killed and nothing from it is kept; what finished before it stays cached. */
@@ -34,6 +37,13 @@ export interface ProveOptions {
 }
 
 interface RunSummary { exit: number | null; secs: number; failed: number; passed: number | null; timedOut: boolean; cached: boolean }
+/** Function before and after (D53): what was compared, and where the answers differ. */
+export interface BehaviourReport {
+  compared: number;
+  differ: number;
+  functions: Array<{ file: string; name: string; status: 'same' | 'differs' | 'skipped'; why?: string; inputs?: number; differences?: number }>;
+}
+
 /** Which commit of the range broke the tests (D49). */
 export interface Culprit {
   /** The first commit in the range where the tests fail, or null when the search stopped, or could not start, before it was down to one. */
@@ -61,6 +71,8 @@ export interface ProofReport {
   regressions: string[];
   /** Set when tests that passed at the base fail at the head and the range has more than one commit. */
   culprit?: Culprit;
+  /** Set when the range changed a function that could be compared. */
+  behaviour?: BehaviourReport;
   reverts: Array<{ file: string; line: number; result: 'covered' | 'unnoticed' | 'skipped'; why?: string }>;
   mutants: Array<{ file: string; line: number; op: string; result: 'killed' | 'survived' | 'invalid' | 'skipped' }>;
   secs: number;
@@ -328,6 +340,57 @@ export async function proveCase(c: Case, opts: ProveOptions = {}): Promise<Proof
       mutRec.summary = `${killed} of ${judged.length} deliberate changes were noticed by the tests${report.mutants.some(x => x.result === 'invalid') ? ` (${report.mutants.filter(x => x.result === 'invalid').length} didn’t compile and weren’t counted)` : ''}`;
       records.push(mutRec);
     }
+
+    /* 4. function before and after (D53): the same inputs at the base and at the head, where the answers differ */
+    if (opts.behaviour !== false && c.base && left() > 0) {
+      const behRec: RunRecord = { id: proofId(c.head, 'behaviour'), kind: 'behaviour', at: now, secs: 0, command: 'function before and after', summary: '', findings: [], signals: [] };
+      const picked: Array<{ fn: Fn; basePath: string }> = [];
+      const functions: BehaviourReport['functions'] = [];
+      for (const f of net) {
+        if (!langOf(f.path) || f.binary) continue;
+        const headText = showFile(c.repo, c.head, f.path);
+        if (headText === null) continue;
+        const basePath = f.oldPath ?? f.path;
+        const { fns, skipped } = candidates(f, headText, f.status === 'added' ? null : showFile(c.repo, c.base, basePath));
+        for (const s of skipped) functions.push({ file: s.file, name: s.name, status: 'skipped', why: s.why });
+        for (const fn of fns) { if (picked.length < 8) picked.push({ fn, basePath }); else functions.push({ file: fn.file, name: fn.name, status: 'skipped', why: 'only the first eight functions are compared' }); }
+      }
+      if (picked.length || functions.length) {
+        const testsChanged = net.some(x => isTestPath(x.path));
+        let baseTree: string | null = null;
+        for (const { fn, basePath } of picked) {
+          if (left() <= 0) { report.stopped = outOfTime('while comparing functions'); functions.push({ file: fn.file, name: fn.name, status: 'skipped', why: 'the time budget was used up' }); continue; }
+          say(`Comparing ${fn.name} in ${fn.file} before and after…`);
+          if (!baseTree) { baseTree = exportTree(c.repo, c.base, 'base'); trees.push(baseTree); linkDependencies(c.repo, baseTree); }
+          const inputs = inputsFor(fn);
+          const timeoutSec = Math.max(5, Math.min(30, Math.ceil(left() / 1000)));
+          const t0 = Date.now();
+          const before = await runFunction({ ...fn, file: basePath }, baseTree, inputs, { timeoutSec, signal: opts.signal });
+          const after = before.answers ? await runFunction(fn, head(), inputs, { timeoutSec, signal: opts.signal }) : before;
+          behRec.secs += Math.round((Date.now() - t0) / 100) / 10;
+          if (!before.answers || !after.answers) { functions.push({ file: fn.file, name: fn.name, status: 'skipped', why: (before.answers ? after.why : before.why) ?? 'it could not be run' }); continue; }
+          const diffs = differences(inputs, before.answers, after.answers);
+          functions.push({ file: fn.file, name: fn.name, status: diffs.length ? 'differs' : 'same', inputs: inputs.length, differences: diffs.length });
+          if (!diffs.length) continue;
+          const file = net.find(x => x.path === fn.file)!;
+          const first = diffs[0];
+          const shown = diffs.slice(0, 3);
+          behRec.findings.push(make({
+            check: 'proof', key: `behave:${fn.file}:${fn.name}`, lens: 'Correctness', severity: testsChanged ? 'low' : 'medium',
+            title: `${fn.name}() answers differently for ${diffs.length} of ${inputs.length} inputs: ${callText(fn.name, first.input)} was ${first.before}, is now ${first.after}`.slice(0, 160),
+            file: fn.file, line: fn.anchor, side: 'added', text: textAt(file, fn.anchor),
+            evidence: [{ kind: 'behaviour-diff', source: 'proof:behaviour', what: `${callText(fn.name, first.input)} returned ${first.before} at the base and ${first.after} at the head. ${diffs.length} of the ${inputs.length} inputs tried give a different answer.`, run: { kind: 'behave', file: fn.file, op: fn.name } }],
+            observed: shown.map(d => `${callText(fn.name, d.input)}: ${d.before} at the base, ${d.after} at the head.`),
+            inferred: ['The change may be what was meant: nothing here says it is a bug, only that the function now answers differently to inputs a caller could send.', testsChanged ? 'A test file changed in this range, so the new behaviour may be covered.' : 'No test file changed in this range, so nothing in the suite would have noticed.'], ref: 'Behaviour'
+          }));
+        }
+        const differ = functions.filter(x => x.status === 'differs').length;
+        const compared = functions.filter(x => x.status !== 'skipped').length;
+        report.behaviour = { compared, differ, functions };
+        behRec.summary = `${compared} function${compared === 1 ? '' : 's'} compared before and after, ${differ} answer${differ === 1 ? 's' : ''} differently`;
+        if (functions.length) records.push(behRec);
+      }
+    }
   } finally {
     for (const d of trees) removeTree(d);
     report.secs = Math.round((Date.now() - started) / 1000);
@@ -367,6 +430,20 @@ export async function replayRun(c: Case, ev: Evidence): Promise<{ reproduced: bo
       const h = await runCommand(cmd, checkout(c.head, 'head'), { timeoutSec: timeout });
       const again = (b === null || green(b)) && (h.exit !== 0 || showedFailure(h));
       return { reproduced: again, detail: again ? `Ran ${cmd.text} again at both ends: passed at the base, failed at the head.` : `Ran ${cmd.text} again: the head ${green(h) ? 'passes now' : 'fails'} and the base ${b && !green(b) ? 'fails too' : 'passes'}.` };
+    }
+    if (run.kind === 'behave') {
+      const f = net.find(x => x.path === run.file);
+      if (!f || !run.op || !c.base) return { reproduced: false, detail: 'The changed file is not in this range any more.' };
+      const headText = showFile(c.repo, c.head, f.path);
+      const basePath = f.oldPath ?? f.path;
+      const fn = headText === null ? undefined : candidates(f, headText, f.status === 'added' ? null : showFile(c.repo, c.base, basePath)).fns.find(x => x.name === run.op);
+      if (!fn) return { reproduced: false, detail: `${run.op} is not a function this range changed that can be compared any more.` };
+      const inputs = inputsFor(fn);
+      const before = await runFunction({ ...fn, file: basePath }, checkout(c.base, 'base'), inputs, { timeoutSec: Math.min(timeout, 30) });
+      const after = await runFunction(fn, checkout(c.head, 'head'), inputs, { timeoutSec: Math.min(timeout, 30) });
+      if (!before.answers || !after.answers) return { reproduced: false, detail: `${fn.name} could not be run again: ${(before.answers ? after.why : before.why) ?? 'unknown'}.` };
+      const diffs = differences(inputs, before.answers, after.answers);
+      return { reproduced: diffs.length > 0, detail: diffs.length ? `Called ${fn.name} again with the same ${inputs.length} inputs at both ends: ${diffs.length} answer${diffs.length === 1 ? '' : 's'} differ, for example ${callText(fn.name, diffs[0].input)}: ${diffs[0].before} then ${diffs[0].after}.` : `Called ${fn.name} again with the same ${inputs.length} inputs at both ends: the answers are the same now.` };
     }
     const dir = checkout(c.head, 'head');
     const file = net.find(x => x.path === run.file);

@@ -55,6 +55,7 @@ export function proofText(r: ProofReport): string {
   if (r.reverts.length) l.push(`  revert test  ${r.reverts.filter(x => x.result === 'unnoticed').length} of ${r.reverts.length} reverted hunks went unnoticed by the tests${r.reverts.some(x => x.result === 'skipped') ? dim(` (${r.reverts.filter(x => x.result === 'skipped').length} couldn’t be judged)`) : ''}`);
   const judged = r.mutants.filter(m => m.result === 'killed' || m.result === 'survived');
   if (r.mutants.length) l.push(`  mutation     ${judged.filter(m => m.result === 'killed').length} of ${judged.length} deliberate changes were noticed${r.mutants.some(m => m.result === 'invalid') ? dim(` (${r.mutants.filter(m => m.result === 'invalid').length} didn’t compile, not counted)`) : ''}`);
+  if (r.behaviour) l.push(`  behaviour    ${r.behaviour.compared} function${r.behaviour.compared === 1 ? '' : 's'} compared before and after, ${r.behaviour.differ ? yellow(`${r.behaviour.differ} answer${r.behaviour.differ === 1 ? 's' : ''} differently`) : 'none answers differently'}${r.behaviour.functions.some(f => f.status === 'skipped') ? dim(` (${r.behaviour.functions.filter(f => f.status === 'skipped').length} skipped)`) : ''}`);
   if (r.reason) l.push(`  ${yellow(r.reason)}`);
   if (r.stopped) l.push(`  ${yellow(`Stopped: ${r.stopped}.`)} ${dim('Run it again: what was done is kept, so it picks up where it stopped.')}`);
   return l.join('\n');

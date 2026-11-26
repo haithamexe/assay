@@ -53,7 +53,7 @@ const HELP = `${bold('assay')}  evidence-first code review
   range     nothing = this branch since it left main (or the last 5 commits)
             A..B = B since A    ·    A...B = B since they met    ·    one commit = just that commit
   options   --repo <dir>  --last <n>  --max <n>  --json  --all  --fresh  --fail-on blocked|mergeable
-  prove     --mutants <n> (8)  --reverts <n> (3)  --budget <seconds> (600)  --no-mutation  --no-revert  --no-bisect
+  prove     --mutants <n> (8)  --reverts <n> (3)  --budget <seconds> (600)  --no-mutation  --no-revert  --no-bisect  --no-behaviour
   look      --pages "/,/cart"  --no-probe  --no-screens  --budget <seconds> (300)
   allow-run --command "<your test command>"  --timeout <seconds> (300)  --off
             --serve "<dev server command>"  --pages "/,/cart"  --browser <path to Chrome, Edge, Brave or Chromium>
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
   if (cmd === 'prove') {
     const c = load(a);
     const report = await proveCase(c, {
-      mutants: a.flags['no-mutation'] ? 0 : num(a, 'mutants'), reverts: a.flags['no-revert'] ? 0 : num(a, 'reverts'), budgetSeconds: num(a, 'budget'), fresh: a.flags.fresh === true, bisect: a.flags['no-bisect'] ? false : undefined,
+      mutants: a.flags['no-mutation'] ? 0 : num(a, 'mutants'), reverts: a.flags['no-revert'] ? 0 : num(a, 'reverts'), budgetSeconds: num(a, 'budget'), fresh: a.flags.fresh === true, bisect: a.flags['no-bisect'] ? false : undefined, behaviour: a.flags['no-behaviour'] ? false : undefined,
       onProgress: m => { if (!json) console.error(dim(m)); }
     });
     const v = verdictOf(c);

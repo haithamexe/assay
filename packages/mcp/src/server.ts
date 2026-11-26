@@ -63,6 +63,7 @@ function proofLines(r: ProofReport): string {
   if (r.reverts.length) l.push(`Revert test: ${r.reverts.filter(x => x.result === 'unnoticed').length} of ${r.reverts.length} reverted hunks went unnoticed by the tests`);
   const judged = r.mutants.filter(m => m.result === 'killed' || m.result === 'survived');
   if (r.mutants.length) l.push(`Mutation: ${judged.filter(m => m.result === 'killed').length} of ${judged.length} deliberate changes were noticed`);
+  if (r.behaviour) l.push(`Behaviour: ${r.behaviour.compared} function${r.behaviour.compared === 1 ? '' : 's'} compared before and after, ${r.behaviour.differ} answer${r.behaviour.differ === 1 ? 's' : ''} differently${r.behaviour.differ ? ' (a difference is for a person to judge: it never blocks)' : ''}`);
   if (r.reason) l.push(r.reason);
   if (r.stopped) l.push(`Stopped: ${r.stopped}. Call prove again to continue.`);
   return l.join('\n');
@@ -250,14 +251,15 @@ export function createServer(version = '0.1.0'): McpServer {
       mutants: z.number().int().min(0).max(12).optional().describe('Deliberate changes to try, each one test run (default 8, 0 = skip)'),
       reverts: z.number().int().min(0).max(5).optional().describe('Hunks to try putting back, each one test run (default 3, 0 = skip)'),
       budget_seconds: z.number().int().min(10).max(600).optional().describe('Stop starting new runs after this long (default 90)'),
+      behaviour: z.boolean().optional().describe('Call the functions the change touched with the same inputs before and after, and report where the answers differ (JavaScript and Python; default true, false = skip)'),
       bisect: z.boolean().optional().describe('When tests that passed now fail, find the first commit where they fail, by running them at about log2 of the commits (default true, false = skip)')
     },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false }
-  }, async ({ case: id, mutants, reverts, budget_seconds, bisect }) => {
+  }, async ({ case: id, mutants, reverts, budget_seconds, bisect, behaviour }) => {
     try {
       const c = getCase(id);
       if (!isAllowed(c.repo)) return fail('A person has to allow this first: they run  assay allow-run  in the repository. You can’t turn it on.');
-      const r = await proveCase(c, { mutants, reverts, bisect, budgetSeconds: budget_seconds ?? 90 });
+      const r = await proveCase(c, { mutants, reverts, bisect, behaviour, budgetSeconds: budget_seconds ?? 90 });
       const s = summary(c, false);
       return text(`${proofLines(r)}\n\n${s.text}`, { ...s.data, proof: { ran: r.ran, regressions: r.regressions, firstFailingCommit: r.culprit?.commit ?? null, stopped: r.stopped ?? null } });
     } catch (e) { return fail((e as Error).message); }

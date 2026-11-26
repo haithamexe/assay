@@ -6,6 +6,10 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Added
 
+**Function before and after** (`assay prove`, MCP `prove`, the run panel)
+- For each function the range changed, Assay gives the **same inputs to it at the base and at the head**, in clean checkouts, and shows where the answers differ: `discount(200, 10)` returned 180 and now returns 2000. JavaScript and Python. This is the `behaviour-diff` proof that was reserved from the start.
+- Only exported functions that existed at the base, take at most six plain parameters and don't look impure (a clock, a file, the network, a random number) are compared; every other changed function is listed as skipped, with the reason. It is not a verdict (the change may be what was meant), so a difference is medium (low if a test changed in the range) and never blocks. It replays. `--no-behaviour` and MCP `behaviour: false` skip it.
+
 **Real bugs from your own history** (`assay calibrate history`, the Scoreboard, [guide](docs/CALIBRATION.md#replaying-your-own-history))
 - The planted bugs are invented; your fix commits are real. A fix removes lines, `git blame` says which commit last wrote each, and that line, in that commit, is the truth. Each such commit becomes a case of its own; the **free checks are scored on it at once** (caught with proof, flagged, missed), and your agent runs the reviewers, the attack pass and one plain review on it, scored on whether they flagged the line the fix later removed.
 - It says what it is: a removed line is a proxy for the defect, only commits that call themselves fixes are used, and there are no false alarms to count (nobody knows the rest of a commit is clean). It reads git and runs nothing. `assay calibrate history`, `start`, `score` and `clean`; the Scoreboard shows the result (read only: starting one is a command).
@@ -76,11 +80,11 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 - Fixed (found by the first CI run): **a folder is one repository however it is spelled.** The key behind allow-run, memory, caches and calibration comes from the real folder, so a folder reached through a link (macOS keeps `/var` and `/tmp` behind one) or by a Windows 8.3 short name is no longer taken for a second repository, one that was never allowed to run anything and had no memory.
 - Fixed (found by the same run): two calibration runs started in the same second got the same commits and so the same cases, with the first run's reports in the second. Each run now has its own.
 
-25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), plus 2 for the fixes above (155), 10 for finding which commit broke the tests (165) and 20 for the attack pass, the plain review and the replay of your own history (185), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
+25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), plus 2 for the fixes above (155), 10 for finding which commit broke the tests (165), 20 for the attack pass, the plain review and the replay of your own history (185) and 6 for function before and after (191), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
 
 ### Not built yet
 
-Function-level before/after. See the [charter](docs/PROJECT.md#5-phases).
+Nothing is queued: what is left is the known limits in the [charter](docs/PROJECT.md#7-where-it-stands).
 
 ## 0.1.0 — 2026-11-25
 

@@ -123,6 +123,7 @@ A page on the internet must not be able to talk to this server, and a mistake in
 
 ## Limits
 
+- The run panel has a *Functions before and after* row: how many changed functions were compared on the same inputs at the base and the head, and how many answer differently (JavaScript and Python).
 - One repository per dashboard, one run at a time, and the timeline reads up to 200 commits.
 - *Stop* can't interrupt a page that is already being measured, only the next one.
 - The pictures are as taken at 1280 × 800 (desktop) and 390 × 844 (phone), as loaded and mirrored on desktop, in the light scheme.

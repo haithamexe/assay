@@ -79,6 +79,7 @@ Running `allow-run` again changes only what you pass; the rest stays.
 | `--mutants <n>` | Deliberate changes to try, one test run each (default 8) |
 | `--reverts <n>` | Hunks to put back, one test run each (default 3) |
 | `--no-mutation`, `--no-revert` | Skip them |
+| `--no-behaviour` | Don't compare the functions the change touched before and after (JavaScript and Python; a difference never blocks) |
 | `--no-bisect` | Don't search for the first commit where the tests fail (a regression is still proven; the search costs about log2 of the commits in test runs) |
 | `--budget <seconds>` | Stop starting new runs after this long (default 600). What was done is kept; run it again to continue. |
 | `--fresh` | Run again even where a result is cached |

@@ -52,6 +52,7 @@ function proveFacts(r) {
       ? html`<code>${short(cu.commit)}</code>${cu.subject ? ` ${cu.subject}` : ''} · passed at <code>${short(cu.lastGood)}</code> · found with ${plural(cu.runs, 'run')} of ${plural(cu.commits, 'commit')}`
       : `${cu.why || 'Not found.'}${cu.span > 1 && cu.span < cu.commits ? ` It is in one of the ${cu.span} commits after ${short(cu.lastGood)}.` : ''}`]);
   }
+  if (r.behaviour) rows.push(['Functions before and after', `${plural(r.behaviour.compared, 'function')} compared; ${r.behaviour.differ ? `${r.behaviour.differ} answer${r.behaviour.differ === 1 ? 's' : ''} differently` : 'none answers differently'}${r.behaviour.functions.some(f => f.status === 'skipped') ? ` · ${r.behaviour.functions.filter(f => f.status === 'skipped').length} skipped` : ''}`]);
   if (r.reverts.length) rows.push(['Reverting the change', `${r.reverts.filter(x => x.result === 'unnoticed').length} of ${r.reverts.length} tried: no test noticed`]);
   if (r.mutants.length) {
     const n = k => r.mutants.filter(m => m.result === k).length;

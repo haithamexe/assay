@@ -34,6 +34,7 @@ test('the tests run from the page prove a regression, and the case keeps it', as
     assert.ok(j.messages.some((m: string) => /Running npm test/.test(m)), 'it says what it is doing as it goes');
     assert.equal(j.result.report.ran, true);
     assert.match(j.result.report.regressions.join(' '), /add adds two numbers/);
+    assert.deepEqual([j.result.report.behaviour.compared, j.result.report.behaviour.differ], [1, 1], 'add answers differently');
     assert.equal(j.result.verdict.tone, 'blocked');
     const reg = j.result.case.findings.find((f: { origin: string }) => f.origin === 'run');
     assert.equal(reg.tier, 'proven');

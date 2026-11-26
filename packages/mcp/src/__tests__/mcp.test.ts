@@ -81,6 +81,7 @@ test('prove runs the project’s own tests once a person has allowed it, and pro
   const r = await call('prove', { case: opened.data.case, mutants: 0, reverts: 0, budget_seconds: 120 });
   assert.equal(r.isError, false, r.text);
   assert.match(r.text, /Regression: add adds two numbers/);
+  assert.match(r.text, /Behaviour: 1 function compared before and after, 1 answers differently \(a difference is for a person to judge: it never blocks\)/);
   assert.match(r.text, /Blocked: 1 proven problem/);
   assert.equal(r.data.tone, 'blocked');
   assert.ok(r.text.length < 3000, 'answers stay short');

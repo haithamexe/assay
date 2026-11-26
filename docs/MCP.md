@@ -56,7 +56,7 @@ also run look; for logic, prove. Don't say done while it says Blocked.
 | `memory` | What this project has got wrong before. With a `case`: which remembered mistakes its findings match (and how often they were false alarms here), and the questions worth asking for its languages. Read only. Arguments: `repo`, `case`, `languages`, `limit`. | No |
 | `finding_submit` | Reports claims as a reviewer, through the evidence gate (below). A reviewer in a panel also says `done: true` (with no claims if it found nothing), may say `tokens` it used, and in cross-examination (`round: 2`) may `disputes` a claim. | No |
 | `finding_resolve` | Dismiss or mark intended a hint or corroborated finding, or reopen it | No |
-| `prove` | The project's tests at base and head, the revert test, mutation. Arguments: `case`, `mutants`, `reverts`, `bisect` (false skips the search for the first failing commit), `budget_seconds` (default 90, up to 600). | **Yes** |
+| `prove` | The project's tests at base and head, the revert test, mutation. Arguments: `case`, `mutants`, `reverts`, `bisect` (false skips the search for the first failing commit), `behaviour` (false skips comparing the changed functions before and after), `budget_seconds` (default 90, up to 600). | **Yes** |
 | `look` | The pages in a real browser at base and head. Arguments: `case`, `pages`, `probe`, `budget_seconds` (default 120). | **Yes** |
 
 Every answer is short: a verdict, counts and the top findings, with the lines one call away (`finding_get`). Answers are capped at a few thousand characters and say how to ask for the rest. They also carry a structured form (`structuredContent`) for clients that want one.
