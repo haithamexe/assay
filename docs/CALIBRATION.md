@@ -47,6 +47,14 @@ A panel of reviewers costs several times what one review costs, so the scoreboar
 - The row's advice says what the lenses add: *"One plain review flagged 3 of 18; the panel flagged 11. The lenses are adding something."*, or *"No gain from the lenses on this set."* if they don't. The headline is the point: you find out whether the panel earns its extra tokens on your project, or whether one plain review would have done.
 - It is blind like the rest, and what only it claimed is **not** cross-examined (it is a measuring stick, not part of the panel). It never counts toward leaving a reviewer out of plans.
 
+## The attack pass, scored
+
+A calibration run plans the attack pass too, on a budget big enough for it (200k by default), and your agent runs it like the others (`reviewer_brief` with lens `attack`, `finding_submit` as `Attack`). It gets a row, **Attack pass (no lens)**, and a column (*Atk*) in the matrix.
+
+- It has no lens, so there is no "own lens" for it to miss in: every planted bug is a chance, as for the plain review. Its false alarms are what it flags on the clean twin; its tokens per catch count what it read.
+- The number that matters is what it adds. The advice says how many of the bugs it flagged **nothing else flagged** (neither the free checks nor any lens): *"The attack pass flagged 3 of 18, and 2 of them nothing else flagged. It earns its tokens here."*, or *"…all of them also flagged by the free checks or a lens. Nothing added on this set."*
+- What it flagged counts toward "flagged by someone". It is never left out of plans by calibration (leaving out is by lens, and it has none): the row is for you to judge whether the 80k budget it needs is worth it on your project.
+
 ## Reading the scoreboard
 
 | Column | Meaning |

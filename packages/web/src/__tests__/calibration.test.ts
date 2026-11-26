@@ -51,7 +51,8 @@ test('planting is a job: the free checks are scored on the spot and the prompt f
   assert.equal(r.board.planted, 17);
   assert.equal(r.board.complete, false);
   assert.equal(r.board.reviewersRan, 0);
-  assert.equal(r.board.rows.length, 8, 'the free checks, six lenses, and the plain review (the baseline)');
+  assert.equal(r.board.rows.length, 9, 'the free checks, six lenses, the attack pass and the plain review (the baseline)');
+  assert.equal(r.board.rows.at(-2).id, 'attack');
   assert.equal(r.board.rows.at(-1).id, 'plain');
   assert.equal(r.board.rows[0].id, 'free');
   assert.equal(r.board.rows[0].alarms, 0, 'no false alarm on the clean twins');

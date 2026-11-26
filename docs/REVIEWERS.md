@@ -98,7 +98,7 @@ One more reviewer, outside the lenses, whose only job is to **break the change**
 - **Cross-examination waits for it**, and then another reviewer examines what only the attacker claimed, like any other claim.
 - Its prompt is a Markdown file, `attack.md`: yours in `~/.assay/lenses` replaces the one that ships.
 
-Assay still never calls a model: your agent runs the attack pass as one more sub-agent. Calibration doesn't score it (the scoreboard scores lenses, and a break belongs to whichever lens it is in).
+Assay still never calls a model: your agent runs the attack pass as one more sub-agent. Calibration scores it on a row of its own, since it has no lens: what it flagged, and how much of that nothing else did ([the attack pass, scored](CALIBRATION.md#the-attack-pass-scored)).
 
 ## What reviewers can and can't do
 

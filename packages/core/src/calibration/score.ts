@@ -10,7 +10,7 @@ import { keepResult, routedOut, type CalibrationRun, type LensRecord, type Plant
 export type Cell = 'C' | 'h' | 'm' | '-' | 'n';
 export const LENSES: Lens[] = ['Security', 'Correctness', 'UI', 'Tests', 'Supply chain', 'Performance'];
 
-export interface BugResult { bug: PlantedBug; free: 'C' | 'h' | 'm'; cells: Partial<Record<Lens, Cell>>; /** What one plain review did with it (D51). */ plain: Cell }
+export interface BugResult { bug: PlantedBug; free: 'C' | 'h' | 'm'; cells: Partial<Record<Lens, Cell>>; /** What one plain review did with it (D51). */ plain: Cell; /** What the attack pass did with it (D55): it has no lens, so every bug is a chance. */ attack: Cell }
 export interface Row {
   id: 'free' | 'plain' | 'attack' | Lens;
   name: string;
@@ -47,13 +47,17 @@ export interface Scoreboard {
   /** Whether the plain review (the baseline) has reported on both cases, and how many bugs it flagged: the number the panel is compared with. */
   plainRan: boolean;
   plainSeen: number;
+  /** Whether the attack pass has reported on the planted case, how many bugs it flagged, and how many of those no lens reviewer flagged. */
+  attackRan: boolean;
+  attackSeen: number;
+  attackOnly: number;
   rows: Row[];
   bugs: BugResult[];
   skipped: CalibrationRun['skipped'];
   cases: { planted: string; control: string };
 }
 
-const NAMES: Record<string, string> = { plain: 'One plain review (no lenses)', free: 'Free checks (no model)', Security: 'Security', Correctness: 'Correctness', UI: 'UI & accessibility', Tests: 'Tests', 'Supply chain': 'Supply chain', Performance: 'Performance' };
+const NAMES: Record<string, string> = { attack: 'Attack pass (no lens)', plain: 'One plain review (no lenses)', free: 'Free checks (no model)', Security: 'Security', Correctness: 'Correctness', UI: 'UI & accessibility', Tests: 'Tests', 'Supply chain': 'Supply chain', Performance: 'Performance' };
 
 /** A finding about the defect itself. A note that no test changed (`diff:`), the project's history or a coverage hint is about process, not about the bug. */
 export const aboutDefect = (f: Finding): boolean => f.evidence.some(e => !/^(?:reviewer|diff|history|coverage):/.test(e.source));
@@ -70,17 +74,19 @@ export function scoreRun(run: CalibrationRun, o: { persist?: boolean } = {}): Sc
   if (!a || !b) throw new Error('The cases of this calibration run are gone. Run assay calibrate start again.');
   const ran = (lens: Lens): boolean => panelOf(a, lens)?.run === true && panelOf(a, lens)?.state === 'reported';
   const plainRan = a.panel?.baseline?.run === true && a.panel.baseline.state === 'reported';
+  const attackRan = a.panel?.attack?.run === true && a.panel.attack.state === 'reported';
   const bugs: BugResult[] = run.planted.bugs.map(bug => {
     const fs = near(a, bug);
     const free = best(fs.filter(aboutDefect)) ?? 'm';
     const plain: Cell = plainRan ? (best(fs.filter(byPlain)) ?? 'm') : 'n';
+    const attack: Cell = attackRan ? (best(fs.filter(byAttack)) ?? 'm') : 'n';
     const cells: Partial<Record<Lens, Cell>> = {};
     for (const lens of LENSES) {
       if (!ran(lens)) { cells[lens] = 'n'; continue; }
       const hit = best(fs.filter(f => lensesOf(f).has(lens)));
       cells[lens] = hit ?? (bug.lens === lens ? 'm' : '-');
     }
-    return { bug, free, cells, plain };
+    return { bug, free, cells, plain, attack };
   });
   const freeAlarms = b.findings.filter(aboutDefect).length;
   const rows: Row[] = [{
@@ -117,8 +123,27 @@ export function scoreRun(run: CalibrationRun, o: { persist?: boolean } = {}): Sc
   const planned = LENSES.filter(l => panelOf(a, l)?.run);
   const complete = planned.length > 0 && planned.every(l => panelOf(a, l)?.state === 'reported' && (!panelOf(b, l)?.run || panelOf(b, l)?.state === 'reported'));
   if (complete && o.persist !== false) keepResult(run.repo, { run: run.id, at: new Date().toISOString(), lenses: lensRecord });
-  const seen = bugs.filter(x => x.free !== 'm' || LENSES.some(l => x.cells[l] === 'C' || x.cells[l] === 'h')).length;
+  const hit = (c: Cell): boolean => c === 'C' || c === 'h';
+  const seen = bugs.filter(x => x.free !== 'm' || LENSES.some(l => hit(x.cells[l] ?? 'n')) || hit(x.attack)).length;
   const plainSeen = bugs.filter(x => x.plain === 'C' || x.plain === 'h').length;
+  const attackSeen = bugs.filter(x => hit(x.attack)).length;
+  // What only the attacker found: a bug it flagged that neither the free checks nor any lens reviewer did.
+  const attackOnly = bugs.filter(x => hit(x.attack) && x.free === 'm' && !LENSES.some(l => hit(x.cells[l] ?? 'n'))).length;
+  if (a.panel?.attack?.run) {
+    // The attack pass (D55): no lens, so no "own lens" to miss in; every bug is a chance. What matters is what it adds to the lenses.
+    const panels = [a, b].map(c => c.panel?.attack).filter((x): x is NonNullable<typeof x> => !!x && x.run && x.state === 'reported');
+    const tokens = panels.length ? panels.reduce((n, x) => n + (x.reportedTokens ?? x.tokens), 0) : null;
+    const caught = bugs.filter(x => x.attack === 'C').length;
+    const flagged = bugs.filter(x => x.attack === 'h').length;
+    const alarms = b.findings.filter(byAttack).length;
+    const advice = !attackRan ? 'Not reported yet.'
+      : b.panel?.attack?.run && b.panel.attack.state !== 'reported' ? 'Not reported on the clean twin yet.'
+        : !LENSES.some(ran) ? `The attack pass flagged ${attackSeen} of ${bugs.length}. Run the lens reviewers to see what it adds to them.`
+          : attackOnly ? `The attack pass flagged ${attackSeen} of ${bugs.length}, and ${attackOnly} of them nothing else flagged. It earns its tokens here.`
+            : attackSeen ? `The attack pass flagged ${attackSeen} of ${bugs.length}, all of them also flagged by the free checks or a lens. Nothing added on this set.`
+              : 'The attack pass flagged none of the planted bugs.';
+    rows.push({ id: 'attack', name: NAMES.attack, ran: attackRan, caught, flagged, missed: bugs.length - caught - flagged, alarms, tokens, tokensKind: panels.length ? (panels.every(x => x.reportedTokens) ? 'reported' : 'estimate') : null, perCatch: tokens !== null && caught + flagged ? Math.round(tokens / (caught + flagged)) : null, chances: bugs.length, hits: caught + flagged, advice });
+  }
   if (a.panel?.baseline?.run) {
     // The baseline (D51): one reviewer, no lens, no free findings. A bug counts for it wherever it is, so it has no "own lens" to miss in: every bug is a chance.
     const panels = [a, b].map(c => c.panel?.baseline).filter((x): x is NonNullable<typeof x> => !!x && x.run && x.state === 'reported');
@@ -135,7 +160,7 @@ export function scoreRun(run: CalibrationRun, o: { persist?: boolean } = {}): Sc
   }
   return {
     run: run.id, createdAt: run.createdAt, complete, planted: bugs.length, freeProven: rows[0].caught, freeSeen: rows[0].hits,
-    seen, plainRan, plainSeen,
+    seen, plainRan, plainSeen, attackRan, attackSeen, attackOnly,
     reviewersRan: LENSES.filter(ran).length, rows, bugs, skipped: run.skipped, cases: { planted: run.planted.case, control: run.control.case }
   };
 }

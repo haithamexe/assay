@@ -127,7 +127,7 @@ function gateHTML(d) {
 
 /* ---------------------------------------------------------------- the scoreboard: does each reviewer earn its tokens? */
 const MARK = { C: ['✓', 'C', 'Caught, with proof'], h: ['~', 'h', 'Flagged, no proof'], m: ['✗', 'm', 'Missed'], '-': ['·', 'na', 'Not this reviewer’s lens'], n: ['?', 'na', 'Not run'] };
-const SHORT = { free: 'Free', plain: 'Plain', Security: 'Sec', Correctness: 'Cor', UI: 'UI', Tests: 'Tests', 'Supply chain': 'Supply', Performance: 'Perf' };
+const SHORT = { free: 'Free', attack: 'Atk', plain: 'Plain', Security: 'Sec', Correctness: 'Cor', UI: 'UI', Tests: 'Tests', 'Supply chain': 'Supply', Performance: 'Perf' };
 const COLS = ['Security', 'Correctness', 'UI', 'Tests', 'Supply chain', 'Performance'];
 const mark = c => { const [g, cls, tip] = MARK[c] || MARK.n; return html`<span class="${cls}" title="${tip}">${g}</span>`; };
 
@@ -172,8 +172,10 @@ function plantedHTML() {
   const b = cal.board;
   const rows = b.rows.map(r => html`<tr><td><b>${r.name}</b></td><td class="num">${r.ran ? r.caught : '·'}</td><td class="num">${r.ran ? r.flagged : '·'}</td><td class="num">${r.ran ? r.missed : '·'}</td><td class="num">${r.ran ? r.alarms : '·'}</td><td class="num">${r.id === 'free' ? '0' : r.perCatch !== null ? html`${k(r.perCatch)}${r.tokensKind === 'estimate' ? '~' : ''}` : '—'}</td><td class="dim">${r.advice}</td></tr>`);
   const hasPlain = b.rows.some(r => r.id === 'plain');
-  const head = html`<div class="mx-row ${hasPlain ? 'mx-8' : 'mx-7'} mx-head"><div>Planted bug</div>${['free', ...COLS, ...(hasPlain ? ['plain'] : [])].map(l => html`<div title="${l === 'free' ? 'Free checks (no model)' : l}">${SHORT[l]}</div>`)}</div>`;
-  const body = b.bugs.map((x, i) => html`<div class="mx-row ${hasPlain ? 'mx-8' : 'mx-7'}"><div>${i + 1}. ${x.bug.name}</div><div>${mark(x.free)}</div>${COLS.map(l => html`<div>${mark(x.cells[l])}</div>`)}${hasPlain ? html`<div>${mark(x.plain)}</div>` : ''}</div>`);
+  const hasAttack = b.rows.some(r => r.id === 'attack');
+  const mx = `mx-${7 + (hasPlain ? 1 : 0) + (hasAttack ? 1 : 0)}`;
+  const head = html`<div class="mx-row ${mx} mx-head"><div>Planted bug</div>${['free', ...COLS, ...(hasAttack ? ['attack'] : []), ...(hasPlain ? ['plain'] : [])].map(l => html`<div title="${l === 'free' ? 'Free checks (no model)' : l}">${SHORT[l]}</div>`)}</div>`;
+  const body = b.bugs.map((x, i) => html`<div class="mx-row ${mx}"><div>${i + 1}. ${x.bug.name}</div><div>${mark(x.free)}</div>${COLS.map(l => html`<div>${mark(x.cells[l])}</div>`)}${hasAttack ? html`<div>${mark(x.attack)}</div>` : ''}${hasPlain ? html`<div>${mark(x.plain)}</div>` : ''}</div>`);
   return html`<div class="toolbar">${btn}<button class="btn btn-sm btn-ghost" data-act="rv-calclear">Clear the throwaway repositories</button></div>
     <div class="callout ${b.reviewersRan ? 'callout-ai' : ''}">${ico.shield}<div><b>${b.freeProven} of ${b.planted} planted bugs were caught by the free checks alone, with proof, at 0 tokens</b> (${b.freeSeen - b.freeProven} more flagged, ${b.planted - b.freeSeen} missed, ${b.rows[0].alarms ? b.rows[0].alarms + ' false alarms' : 'no false alarms'} on the clean twins). ${b.reviewersRan ? html`With the reviewers: ${b.seen} of ${b.planted} flagged by someone.${b.complete ? '' : ' Not every reviewer has reported yet.'}` : 'The reviewers have not been run yet.'}</div></div>
     ${cal.routedOut.length ? html`<div class="callout">${ico.alert}<div><b>Left out of plans:</b>${cal.routedOut.map(x => html`<br>${x.lens}: ${x.why}`)}<br><span class="dim">Bring one back with <code>assay reviewers plan --include &lt;lens&gt;</code>.</span></div></div>` : ''}

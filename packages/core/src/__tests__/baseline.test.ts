@@ -121,3 +121,38 @@ test('every pass reports first, then cross-examination opens, and what only the 
   assert.ok(plainOnly.every(f => !assigned.includes(f.id)), 'and no one is asked to confirm it');
   assert.ok(assigned.length >= 1, 'what a lens reviewer claimed alone is still examined');
 });
+
+test('the attack pass is scored too: a row, a column, and what it adds to the lenses', () => {
+  const p = project();
+  const run = cal.startCalibration(p.dir);
+  assert.equal(core.loadCase(run.planted.case)!.panel!.attack?.run, true, 'a calibration budget is big enough for the attack pass');
+  let b = cal.scoreRun(run, { persist: false });
+  const early = b.rows.find(r => r.id === 'attack')!;
+  assert.equal(early.ran, false);
+  assert.match(early.advice, /Not reported yet/);
+  assert.deepEqual([b.attackRan, b.attackSeen, b.attackOnly], [false, 0, 0]);
+  assert.ok(b.bugs.every(x => x.attack === 'n'));
+
+  // the attacker flags the committed key (the free checks prove it), two bugs only a reading could find, and cries wolf once on the clean twin
+  report(run.planted.case, 'Attack', [at(run, 'hardcoded-key'), at(run, 'off-by-one'), at(run, 'swapped-args')], 7000);
+  report(run.control.case, 'Attack', [{ file: 'src/web/comment_list.js', line: 5 }], 2500);
+  b = cal.scoreRun(run, { persist: false });
+  const row = b.rows.find(r => r.id === 'attack')!;
+  assert.deepEqual(b.rows.map(r => r.id).slice(-2), ['attack', 'plain'], 'the attack pass comes before the baseline');
+  assert.deepEqual([row.ran, row.caught, row.flagged, row.alarms, row.hits], [true, 1, 2, 1, 3]);
+  assert.equal(row.missed, b.planted - 3);
+  assert.deepEqual([row.tokens, row.tokensKind, row.perCatch], [9500, 'reported', Math.round(9500 / 3)]);
+  assert.deepEqual([b.attackRan, b.attackSeen, b.attackOnly], [true, 3, 2], 'two of its three flags are on bugs the free checks did not flag');
+  assert.equal(b.bugs.find(x => x.bug.id === 'hardcoded-key')!.attack, 'C');
+  assert.equal(b.bugs.find(x => x.bug.id === 'off-by-one')!.attack, 'h');
+  assert.equal(b.bugs.find(x => x.bug.id === 'html-sink')!.attack, 'm');
+  assert.match(row.advice, /flagged 3 of \d+\. Run the lens reviewers to see what it adds to them/);
+  assert.ok(b.seen >= 3, 'what it flagged counts as flagged by someone');
+
+  // then the lenses: Correctness finds the off-by-one too, so only the swapped arguments are the attacker's alone
+  report(run.planted.case, 'Correctness', [at(run, 'off-by-one')], 2000);
+  b = cal.scoreRun(run, { persist: false });
+  assert.equal(b.attackOnly, 1);
+  assert.match(b.rows.find(r => r.id === 'attack')!.advice, /flagged 3 of \d+, and 1 of them nothing else flagged\. It earns its tokens here\./);
+  assert.equal(b.rows.find(r => r.id === 'Correctness')!.hits, 1, 'the lens row is untouched by it');
+});

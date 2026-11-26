@@ -40,9 +40,10 @@ export function boardText(b: Board): string {
     const per = r.id === 'free' ? '0' : r.perCatch !== null ? `${k(r.perCatch)}${r.tokensKind === 'estimate' ? '~' : ''}` : r.ran ? '—' : '';
     l.push(`${pad(r.name, 22)} ${padL(r.ran ? String(r.caught) : '', 6)} ${padL(r.ran ? String(r.flagged) : '', 7)} ${padL(r.ran ? String(r.missed) : '', 6)} ${padL(r.ran ? String(r.alarms) : '', 6)} ${padL(per, 9)}  ${dim(r.advice)}`);
   }
-  l.push('', `${pad('Planted bug', 44)} Free  Sec  Cor  UI   Test Sup  Perf`);
+  const hasAttack = b.rows.some(r => r.id === 'attack'), hasPlain = b.rows.some(r => r.id === 'plain');
+  l.push('', `${pad('Planted bug', 44)} Free  Sec  Cor  UI   Test Sup  Perf${hasAttack ? '  Atk' : ''}${hasPlain ? '  Plain' : ''}`);
   const col = (x: Cal.BugResult, lens: string): string => cell(x.cells[lens as keyof typeof x.cells]);
-  for (const x of b.bugs) l.push(`${pad(`${x.bug.name}`, 44)} ${cell(x.free)}     ${['Security', 'Correctness', 'UI', 'Tests', 'Supply chain', 'Performance'].map(le => `${col(x, le)}    `).join('').trimEnd()}`);
+  for (const x of b.bugs) l.push(`${pad(`${x.bug.name}`, 44)} ${cell(x.free)}     ${['Security', 'Correctness', 'UI', 'Tests', 'Supply chain', 'Performance'].map(le => `${col(x, le)}    `).join('').trimEnd()}${hasAttack ? `     ${cell(x.attack)}` : ''}${hasPlain ? `      ${cell(x.plain)}` : ''}`);
   l.push('', dim(`${green('✓')} caught with proof   ${yellow('~')} flagged, no proof   ${red('✗')} missed   · not its lens   ? not run`));
   return l.join('\n');
 }

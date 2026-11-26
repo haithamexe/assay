@@ -6,6 +6,10 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Added
 
+**The attack pass is scored** (`assay calibrate`, the Scoreboard, [guide](docs/CALIBRATION.md#the-attack-pass-scored))
+- A calibration run now plans the attack pass and scores it: a row (*Attack pass (no lens)*) and an *Atk* column in the matrix. It has no lens, so every planted bug is a chance, and its false alarms are its flags on the clean twin.
+- The advice says what it adds: how many of the bugs it flagged nothing else flagged (not the free checks, not any lens), so you can judge whether the 80k budget it needs is earned on your project.
+
 **Three known limits, closed**
 - **More test runners are found by themselves**: `dotnet test`, Maven, Gradle (the wrapper when there is one), `deno test`, `bundle exec rspec` and `make test`, after the ones that were already there. Fixed words only, never from a request.
 - **A renamed file is still looked for.** A finding in a file the range only renamed is no longer marked fixed, and a fix made after the rename is found.

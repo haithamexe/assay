@@ -42,13 +42,13 @@ t('the scoreboard in the page: what would be planted, plant, the free checks sco
     assert.match(await p.evaluate<string>('location.hash'), /tab=score/, 'the tab is in the address');
 
     await click('[data-act="rv-calibrate"]');
-    await until('the scoreboard', async () => (await count('.mx-row.mx-8')) > 5 && /planted bugs were caught by the free checks alone/.test(await text('#main')));
+    await until('the scoreboard', async () => (await count('.mx-row.mx-9')) > 5 && /planted bugs were caught by the free checks alone/.test(await text('#main')));
     assert.match(await text('.callout'), /no false alarms on the clean twins/);
-    assert.equal(await count('table.table tbody tr'), 8, 'the free checks, six reviewers and the plain review');
+    assert.equal(await count('table.table tbody tr'), 9, 'the free checks, six reviewers, the attack pass and the plain review');
     assert.match(await text('table.table'), /Free checks \(no model\)/);
     assert.match(await p.evaluate<string>("document.querySelector('#main textarea.brief').value"), /Review two cases with Assay's reviewer panel/);
-    assert.ok((await count('.mx-row.mx-8 .C')) >= 1, 'a bug caught with proof');
-    assert.ok((await count('.mx-row.mx-8 .m')) >= 1, 'a bug the free checks missed');
+    assert.ok((await count('.mx-row.mx-9 .C')) >= 1, 'a bug caught with proof');
+    assert.ok((await count('.mx-row.mx-9 .m')) >= 1, 'a bug the free checks missed');
     assert.match(await text('#main'), /The reviewers have not been run yet/);
 
     // the agent (this test) runs the reviewers; the table fills in by itself
@@ -68,7 +68,7 @@ t('the scoreboard in the page: what would be planted, plant, the free checks sco
     await until('the reviewers on the board', async () => !/The reviewers have not been run yet/.test(await text('#main')) && /With the reviewers: \d+ of \d+ flagged by someone/.test(await text('#main')), 15_000);
     assert.match(await text('table.table'), /Keep|Caught none of/);
     assert.equal(await count('#main textarea.brief'), 0, 'the prompt goes away once they have run');
-    assert.ok((await count('.mx-row.mx-8 .h')) >= 3, 'flags without proof');
+    assert.ok((await count('.mx-row.mx-9 .h')) >= 3, 'flags without proof');
 
     // clearing
     await click('[data-act="rv-calclear"]');

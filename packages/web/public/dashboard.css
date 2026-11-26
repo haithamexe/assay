@@ -89,9 +89,10 @@ details.commits[open] > summary { border-bottom: 1px solid var(--border); }
 /* the scoreboard */
 .mx-row.mx-7 { grid-template-columns: minmax(180px, 1.6fr) repeat(7, minmax(46px, 1fr)); }
 .mx-row.mx-8 { grid-template-columns: minmax(180px, 1.6fr) repeat(8, minmax(46px, 1fr)); }
+.mx-row.mx-9 { grid-template-columns: minmax(180px, 1.6fr) repeat(9, minmax(46px, 1fr)); }
 .mx .n { color: var(--text-dim); }
 .pastbugs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .pastbugs .mk { display: inline-block; min-width: 1.2em; }
 .pastbugs .mk .C { color: var(--ok); font-weight: 700; } .pastbugs .mk .h { color: var(--warn-ink); font-weight: 700; } .pastbugs .mk .m { color: var(--danger); font-weight: 700; }
 .legend .lg-c { color: var(--ok); } .legend .lg-h { color: var(--warn-ink); } .legend .lg-m { color: var(--danger); }
-@media (max-width: 640px) { .mx { overflow-x: auto; } .mx-row.mx-7 { min-width: 520px; } .mx-row.mx-8 { min-width: 580px; } }
+@media (max-width: 640px) { .mx { overflow-x: auto; } .mx-row.mx-7 { min-width: 520px; } .mx-row.mx-8 { min-width: 580px; } .mx-row.mx-9 { min-width: 640px; } }
