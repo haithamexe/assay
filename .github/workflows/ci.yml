@@ -1,14 +1,18 @@
 # Tests on Linux, macOS and Windows, with the Node versions Assay supports.
 #
-# For now this runs only when someone starts it (Actions tab, "Run workflow"). Once the repository is public, runs are free, and the
-# "push" and "pull_request" lines below can be switched on so every change is tested on all three systems.
+# Runs on every push to main and every pull request, and can be started by hand (Actions tab, "Run workflow").
 name: CI
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  # pull_request:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch replaces a run that is still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
