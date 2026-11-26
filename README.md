@@ -108,7 +108,7 @@ Does each reviewer earn its tokens? Assay plants known bugs in a throwaway repos
 node /path/to/assay/packages/cli/dist/index.js calibrate start     # plant, score the free checks, print what to give your agent
 ```
 
-![The Scoreboard: the free checks scored at no cost, and six reviewers on catches, misses, false alarms and tokens per catch](docs/images/dashboard-scoreboard.png)
+![The Scoreboard: the free checks scored at no cost, six reviewers, the attack pass and one plain review on catches, misses, false alarms and tokens per catch](docs/images/dashboard-scoreboard.png)
 
 Nothing in your project is touched, no model is called by Assay, and nothing is spent until your agent runs the reviewers. [The calibration guide →](docs/CALIBRATION.md)
 
@@ -128,7 +128,7 @@ Reading a diff runs nothing. Running tests, a dev server or a browser happens on
 
 ## Status
 
-Built and tested (195 tests, including real `npm test` runs and a real browser):
+Built and tested (205 tests, including real `npm test` runs and a real browser):
 
 - the engine, CLI, MCP server and one-file HTML report
 - proof: tests at base and head, the revert test, mutation, with caching and a time budget

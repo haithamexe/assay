@@ -458,7 +458,7 @@ pre.code, .rawblock { margin: 0; padding: var(--s3) var(--s4); border-radius: va
 .bignum b { font-size: var(--t-xl); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .bignum span { color: var(--text-dim); font-size: var(--t-xs); }
 .mx { display: grid; border: 1px solid var(--border); border-radius: var(--r1); overflow: hidden; }
-.mx-row { display: grid; grid-template-columns: minmax(180px, 1.6fr) repeat(8, minmax(52px, 1fr)); }
+.mx-row { display: grid; grid-template-columns: minmax(180px, 1.6fr) repeat(9, minmax(48px, 1fr)); }
 .mx-row > div { padding: 6px var(--s2); border-bottom: 1px solid var(--border); font-size: var(--t-xs); text-align: center; display: grid; place-items: center; }
 .mx-row > div:first-child { text-align: left; place-items: center start; }
 .mx-row:last-child > div { border-bottom: 0; }
@@ -520,7 +520,7 @@ textarea.brief { width: 100%; min-height: 220px; padding: var(--s3); border: 1px
   .cmp-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cmp-side { grid-template-columns: 1fr; }
   .stepper, .rgrid { grid-template-columns: 1fr; }
-  .mx-row { grid-template-columns: minmax(150px, 1.6fr) repeat(8, minmax(40px, 1fr)); }
+  .mx-row { grid-template-columns: minmax(150px, 1.6fr) repeat(9, minmax(36px, 1fr)); }
   .page-title { font-size: var(--t-2xl, 1.875rem); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -793,21 +793,22 @@ const CAL_ROWS = [
   { id: 'ui', name: 'UI & accessibility', tokens: 3400, alarms: 0 },
   { id: 'sup', name: 'Supply chain', tokens: 2200, alarms: 1 },
   { id: 'perf', name: 'Performance', tokens: 3000, alarms: 2 },
+  { id: 'attack', name: 'Attack pass (no lens)', tokens: 7200, alarms: 2 },
   { id: 'plain', name: 'One plain AI review (no gate)', tokens: 9500, alarms: 7, plain: true }
 ];
 const CAL_BUGS = [
-  ['Off-by-one in pagination', 'm-Ch---h'],
-  ['Auth check removed from a route', 'mCh----m'],
-  ['Unescaped output in a template', 'CC-----h'],
-  ['Arguments swapped in a discount call', 'm-CC---h'],
-  ['Null check removed before .length', 'm-mh---m'],
-  ['SQL built by string concatenation', 'CC-----h'],
-  ['Secret hard-coded in config', 'CC-----h'],
-  ['aria-label removed from an icon button', 'C---C--m'],
-  ['left/right used in a mirrored layout', 'C---C--m'],
-  ['Test assertion weakened to always pass', 'C--C---m'],
-  ['Look-alike dependency added', 'hh---C-m'],
-  ['N+1 query added in a loop', 'C-h---Cm']
+  ['Off-by-one in pagination', 'm-Ch---hh'],
+  ['Auth check removed from a route', 'mCh----hm'],
+  ['Unescaped output in a template', 'CC-----hh'],
+  ['Arguments swapped in a discount call', 'm-CC---hh'],
+  ['Null check removed before .length', 'm-mh---hm'],
+  ['SQL built by string concatenation', 'CC-----hh'],
+  ['Secret hard-coded in config', 'CC-----mh'],
+  ['aria-label removed from an icon button', 'C---C--mm'],
+  ['left/right used in a mirrored layout', 'C---C--mm'],
+  ['Test assertion weakened to always pass', 'C--C---mm'],
+  ['Look-alike dependency added', 'hh---C-mm'],
+  ['N+1 query added in a loop', 'C-h---Chm']
 ];
 
 const STR = {
@@ -820,6 +821,25 @@ const SYMPTOMS = [
   { id: 'xss', label: 'A coupon code is inserted as HTML on /cart', firstBad: 'e5a1c03' },
   { id: 'rtl', label: 'The order summary overlaps itself in Arabic', firstBad: 'a41c9e2' }
 ];
+
+/* From your own history: real bugs, found by blame on what a fix removed, and what the free checks and each reviewer did with the line when it came in. Sample data. */
+const HIST = {
+  total: 9, commits: 6, looked: 14, elsewhere: 5,
+  rows: [
+    { name: 'Free checks (no model)', C: 2, h: 2, m: 5, per: '0', advice: 'Flagged 4 of 9 real past bugs at the time they came in, at 0 tokens.' },
+    { name: 'Security', C: 0, h: 2, m: 7, per: '2.4k', advice: 'Flagged 2 of 9.' },
+    { name: 'Correctness', C: 0, h: 4, m: 5, per: '1.6k', advice: 'Flagged 4 of 9.' },
+    { name: 'Attack pass (no lens)', C: 0, h: 5, m: 4, per: '1.9k', advice: 'Flagged 5 of 9.' },
+    { name: 'One plain AI review (no gate)', C: 0, h: 3, m: 6, per: '3.1k', advice: 'One plain review flagged 3 of 9; the panel flagged 7. The lenses are adding something.' }
+  ],
+  bugs: [
+    ['web/src/cart/CouponError.tsx:38', 'Show coupon errors in the cart', 'fix: show coupon errors as text', 'C'],
+    ['api/cart.py:82', 'Apply coupons on the server', 'fix: an empty cart answers 400', 'm'],
+    ['api/discount.py:14', 'Add discount rules', 'fix: swap the arguments of the discount call', 'm'],
+    ['web/src/checkout/summary.css:12', 'Restyle the order summary', 'fix: use inset-inline-end for the badge', 'h']
+  ],
+  seen: 7
+};
 
 /* Assay demo. One page of vanilla JS. The real tool would build the DOM with an h() helper and text nodes;
    this prototype uses template strings with escaping, because everything on screen is sample data. */
@@ -1329,14 +1349,30 @@ function pageScore() {
   const union = CAL_BUGS.slice(0, n).filter(([, s]) => s.slice(0, 7).includes('C')).length; const free = CAL_BUGS.slice(0, n).filter(([, s]) => s[0] === 'C').length;
   const btn = `<button class="btn btn-second" data-act="inject" ${S.cal.state === 'running' ? 'disabled' : ''}>${S.cal.state === 'running' ? '<span class="spinner"></span> Planting bugs…' : ico.play + ' Plant 12 bugs and test the reviewers'}</button>`;
   if (!n) return `<div class="card card-pad" style="display:flex;flex-direction:column;gap:12px;align-items:flex-start"><div class="card-title">Who do you trust?</div><p class="dim" style="max-width:62ch">Assay plants known bugs in a throwaway copy of your code, then checks which reviewer finds what, with and without proof. It also reviews clean code to count false alarms. Reviewers that don’t earn their tokens get routed out.</p>${btn}</div>`;
-  const rows = st.map(r => `<tr><td><b>${e(r.name)}</b></td><td class="num">${r.C}</td><td class="num">${r.h}</td><td class="num">${r.m}</td><td class="num">${r.alarms}</td><td class="num">${r.C ? fmtK(Math.round(r.tokens / r.C)) : r.tokens ? '—' : '0'}</td><td class="dim">${done ? e(ADVICE[r.id]) : ''}</td></tr>`).join('');
-  const colH = CAL_ROWS.map(r => `<div title="${e(r.name)}">${e(r.name.replace('One plain AI review (no gate)', 'Plain').replace('Free checks (no model)', 'Free').replace('UI & accessibility', 'UI').replace('Supply chain', 'Supply').replace('Performance', 'Perf'))}</div>`).join('');
+  const ai = CAL_ROWS.findIndex(r => r.id === 'attack');
+  const atkSeen = CAL_BUGS.slice(0, n).filter(([, s]) => /[Ch]/.test(s[ai])).length;
+  const atkOnly = CAL_BUGS.slice(0, n).filter(([, s]) => s[0] === 'm' && !/[Ch]/.test(s.slice(1, 7)) && /[Ch]/.test(s[ai])).length;
+  const advice = { ...ADVICE, attack: `Flagged ${atkSeen} of ${n}${atkOnly ? `, and ${atkOnly} of them nothing else flagged. It earns its tokens here.` : ', all of them also flagged by the free checks or a lens. Nothing added on this sample.'}` };
+  const rows = st.map(r => `<tr><td><b>${e(r.name)}</b></td><td class="num">${r.C}</td><td class="num">${r.h}</td><td class="num">${r.m}</td><td class="num">${r.alarms}</td><td class="num">${r.C ? fmtK(Math.round(r.tokens / r.C)) : r.tokens ? '—' : '0'}</td><td class="dim">${done ? e(advice[r.id]) : ''}</td></tr>`).join('');
+  const colH = CAL_ROWS.map(r => `<div title="${e(r.name)}">${e(r.name.replace('One plain AI review (no gate)', 'Plain').replace('Free checks (no model)', 'Free').replace('Attack pass (no lens)', 'Atk').replace('UI & accessibility', 'UI').replace('Supply chain', 'Supply').replace('Performance', 'Perf'))}</div>`).join('');
   const mrows = CAL_BUGS.slice(0, n).map(([name, s], k) => `<div class="mx-row"><div>${k + 1}. ${e(name)}</div>${[...s].map((ch, ci) => `<div class="${CAL_ROWS[ci].plain ? 'plain-row' : ''}"><span class="${ch === '-' ? 'na' : ch}" title="${ch === 'C' ? 'Caught, with proof' : ch === 'h' ? 'Flagged, no proof' : ch === 'm' ? 'Missed' : 'Not this reviewer’s lens'}">${ch === 'C' ? '✓' : ch === 'h' ? '~' : ch === 'm' ? '✗' : '·'}</span></div>`).join('')}</div>`).join('');
   return `<div class="toolbar">${btn}</div>
     <div class="callout callout-ai">${ico.shield}<div><b>${free} of ${n} planted bugs were caught by the free checks alone, with proof, at 0 tokens.</b> With the reviewers: ${union} of ${n}.${done ? ' Only bug 5 (a removed null check) stayed a hint.' : ''}</div></div>
     <div class="card"><div class="table-wrap"><table class="table"><thead><tr><th>Reviewer</th><th class="num" title="Caught, with proof">Caught</th><th class="num" title="Flagged without proof">Flagged only</th><th class="num">Missed</th><th class="num" title="Flags on clean code">False alarms</th><th class="num">Tokens per catch</th><th>What it suggests</th></tr></thead><tbody>${rows}</tbody></table></div></div>
     <div class="mx" role="table" aria-label="Which reviewer caught which planted bug"><div class="mx-row mx-head"><div>Planted bug</div>${colH}</div>${mrows}</div>
-    <div class="legend"><span><b style="color:var(--ok)">✓</b> caught with proof</span><span><b style="color:var(--warn-ink)">~</b> flagged, no proof</span><span><b style="color:var(--danger)">✗</b> missed</span><span>· not its lens</span><span>Sample numbers: yours would come from your own repos.</span></div>`;
+    <div class="legend"><span><b style="color:var(--ok)">✓</b> caught with proof</span><span><b style="color:var(--warn-ink)">~</b> flagged, no proof</span><span><b style="color:var(--danger)">✗</b> missed</span><span>· not its lens</span><span>Sample numbers: yours would come from your own repos.</span></div>${done ? histCard() : ''}`;
+}
+
+/* the replay of the project's own fix commits: real bugs, found by blame, scored the same way */
+function histCard() {
+  const mark = ch => `<span class="${ch}" title="${ch === 'C' ? 'Caught, with proof' : ch === 'h' ? 'Flagged, no proof' : 'Missed'}">${ch === 'C' ? '✓' : ch === 'h' ? '~' : '✗'}</span>`;
+  const rows = HIST.rows.map(r => `<tr><td><b>${e(r.name)}</b></td><td class="num">${r.C}</td><td class="num">${r.h}</td><td class="num">${r.m}</td><td class="num">${e(r.per)}</td><td class="dim">${e(r.advice)}</td></tr>`).join('');
+  const list = HIST.bugs.map(([where, came, fix, ch]) => `<li><span class="mx">${mark(ch)}</span> <code>${e(where)}</code> <span class="dim">came in with “${e(came)}”, fixed by “${e(fix)}”</span></li>`).join('');
+  return `<div class="card card-pad" style="display:flex;flex-direction:column;gap:12px;margin-top:var(--s4)"><div class="card-title">From your own history</div>
+    <div class="callout callout-ai">${ico.shield}<div><b>2 of ${HIST.total} real past bugs were caught by the free checks alone, with proof, when they came in</b> (2 more flagged, 5 missed), at 0 tokens. With the reviewers: ${HIST.seen} of ${HIST.total} flagged by someone. <span class="dim">${HIST.elsewhere} more flags elsewhere in those commits are not counted: nobody knows those lines are clean. A removed line is a proxy for the defect, so this is a sample of your own history, not a verdict.</span></div></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Reviewer</th><th class="num">Caught</th><th class="num">Flagged only</th><th class="num">Missed</th><th class="num">Tokens per catch</th><th>What it suggests</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <ul style="list-style:none;margin:0;padding:0;display:grid;gap:6px">${list}</ul>
+    <p class="dim">${HIST.commits} commits replayed (${HIST.looked} fix commits looked at), from <code>assay calibrate history start</code>. Sample data.</p></div>`;
 }
 ACT.inject = async () => { S.cal = { state: 'running', n: 0 }; render(); for (let i = 1; i <= CAL_BUGS.length; i++) { await sleep(330); S.cal.n = i; if (parseHash().page === 'reviewers') render(); } S.cal.state = 'done'; render(); announce('Calibration done'); };
 

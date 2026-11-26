@@ -4,7 +4,7 @@ Does each reviewer earn its tokens? Plant known bugs, and find out. Back to the 
 
 A reviewer's opinion of itself is worth nothing, and a model's confidence is worth little more. Calibration replaces both with a measurement: Assay plants bugs it knows about in a throwaway repository, **scores the free checks on the spot**, has your own agent run the reviewers on it, and scores each reviewer on what it caught, what it missed, and what it flagged in code that was fine. A reviewer that doesn't earn its tokens is left out of future plans.
 
-![The Scoreboard: 18 planted bugs, the free checks scored at no cost, and six reviewers scored on catches, misses, false alarms and tokens per catch](images/dashboard-scoreboard.png)
+![The Scoreboard: 18 planted bugs, the free checks scored at no cost, and six reviewers, the attack pass and one plain review scored on catches, misses, false alarms and tokens per catch](images/dashboard-scoreboard.png)
 
 **Assay never calls a model**, here as everywhere. The free checks are scored without one. The reviewers are run by your agent (the same panel as [Reviewers](REVIEWERS.md)), and Assay does the planting and the scoring.
 

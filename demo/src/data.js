@@ -221,21 +221,22 @@ const CAL_ROWS = [
   { id: 'ui', name: 'UI & accessibility', tokens: 3400, alarms: 0 },
   { id: 'sup', name: 'Supply chain', tokens: 2200, alarms: 1 },
   { id: 'perf', name: 'Performance', tokens: 3000, alarms: 2 },
+  { id: 'attack', name: 'Attack pass (no lens)', tokens: 7200, alarms: 2 },
   { id: 'plain', name: 'One plain AI review (no gate)', tokens: 9500, alarms: 7, plain: true }
 ];
 const CAL_BUGS = [
-  ['Off-by-one in pagination', 'm-Ch---h'],
-  ['Auth check removed from a route', 'mCh----m'],
-  ['Unescaped output in a template', 'CC-----h'],
-  ['Arguments swapped in a discount call', 'm-CC---h'],
-  ['Null check removed before .length', 'm-mh---m'],
-  ['SQL built by string concatenation', 'CC-----h'],
-  ['Secret hard-coded in config', 'CC-----h'],
-  ['aria-label removed from an icon button', 'C---C--m'],
-  ['left/right used in a mirrored layout', 'C---C--m'],
-  ['Test assertion weakened to always pass', 'C--C---m'],
-  ['Look-alike dependency added', 'hh---C-m'],
-  ['N+1 query added in a loop', 'C-h---Cm']
+  ['Off-by-one in pagination', 'm-Ch---hh'],
+  ['Auth check removed from a route', 'mCh----hm'],
+  ['Unescaped output in a template', 'CC-----hh'],
+  ['Arguments swapped in a discount call', 'm-CC---hh'],
+  ['Null check removed before .length', 'm-mh---hm'],
+  ['SQL built by string concatenation', 'CC-----hh'],
+  ['Secret hard-coded in config', 'CC-----mh'],
+  ['aria-label removed from an icon button', 'C---C--mm'],
+  ['left/right used in a mirrored layout', 'C---C--mm'],
+  ['Test assertion weakened to always pass', 'C--C---mm'],
+  ['Look-alike dependency added', 'hh---C-mm'],
+  ['N+1 query added in a loop', 'C-h---Chm']
 ];
 
 const STR = {
@@ -248,3 +249,22 @@ const SYMPTOMS = [
   { id: 'xss', label: 'A coupon code is inserted as HTML on /cart', firstBad: 'e5a1c03' },
   { id: 'rtl', label: 'The order summary overlaps itself in Arabic', firstBad: 'a41c9e2' }
 ];
+
+/* From your own history: real bugs, found by blame on what a fix removed, and what the free checks and each reviewer did with the line when it came in. Sample data. */
+const HIST = {
+  total: 9, commits: 6, looked: 14, elsewhere: 5,
+  rows: [
+    { name: 'Free checks (no model)', C: 2, h: 2, m: 5, per: '0', advice: 'Flagged 4 of 9 real past bugs at the time they came in, at 0 tokens.' },
+    { name: 'Security', C: 0, h: 2, m: 7, per: '2.4k', advice: 'Flagged 2 of 9.' },
+    { name: 'Correctness', C: 0, h: 4, m: 5, per: '1.6k', advice: 'Flagged 4 of 9.' },
+    { name: 'Attack pass (no lens)', C: 0, h: 5, m: 4, per: '1.9k', advice: 'Flagged 5 of 9.' },
+    { name: 'One plain AI review (no gate)', C: 0, h: 3, m: 6, per: '3.1k', advice: 'One plain review flagged 3 of 9; the panel flagged 7. The lenses are adding something.' }
+  ],
+  bugs: [
+    ['web/src/cart/CouponError.tsx:38', 'Show coupon errors in the cart', 'fix: show coupon errors as text', 'C'],
+    ['api/cart.py:82', 'Apply coupons on the server', 'fix: an empty cart answers 400', 'm'],
+    ['api/discount.py:14', 'Add discount rules', 'fix: swap the arguments of the discount call', 'm'],
+    ['web/src/checkout/summary.css:12', 'Restyle the order summary', 'fix: use inset-inline-end for the badge', 'h']
+  ],
+  seen: 7
+};

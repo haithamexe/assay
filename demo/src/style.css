@@ -450,7 +450,7 @@ pre.code, .rawblock { margin: 0; padding: var(--s3) var(--s4); border-radius: va
 .bignum b { font-size: var(--t-xl); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .bignum span { color: var(--text-dim); font-size: var(--t-xs); }
 .mx { display: grid; border: 1px solid var(--border); border-radius: var(--r1); overflow: hidden; }
-.mx-row { display: grid; grid-template-columns: minmax(180px, 1.6fr) repeat(8, minmax(52px, 1fr)); }
+.mx-row { display: grid; grid-template-columns: minmax(180px, 1.6fr) repeat(9, minmax(48px, 1fr)); }
 .mx-row > div { padding: 6px var(--s2); border-bottom: 1px solid var(--border); font-size: var(--t-xs); text-align: center; display: grid; place-items: center; }
 .mx-row > div:first-child { text-align: left; place-items: center start; }
 .mx-row:last-child > div { border-bottom: 0; }
@@ -512,7 +512,7 @@ textarea.brief { width: 100%; min-height: 220px; padding: var(--s3); border: 1px
   .cmp-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cmp-side { grid-template-columns: 1fr; }
   .stepper, .rgrid { grid-template-columns: 1fr; }
-  .mx-row { grid-template-columns: minmax(150px, 1.6fr) repeat(8, minmax(40px, 1fr)); }
+  .mx-row { grid-template-columns: minmax(150px, 1.6fr) repeat(9, minmax(36px, 1fr)); }
   .page-title { font-size: var(--t-2xl, 1.875rem); }
 }
 @media (prefers-reduced-motion: reduce) {

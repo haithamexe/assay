@@ -6,6 +6,9 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Added
 
+**The demo and the pictures follow the product**
+- The demo's Scoreboard shows the attack pass (a row and an *Atk* column, with what it adds) next to the plain review, and a *From your own history* card with sample data. `npm run screenshots` retakes the dashboard's scoreboard with the attack pass and the plain review in it.
+
 **Arabic text in the browser checks** (`assay look`, MCP `look`)
 - A twelfth combination (on both sizes and both colour schemes): the page is mirrored, set to `lang="ar"`, and its own text is swapped for real Arabic letters about 30% longer, so the browser shapes them and falls back to an Arabic font as it would for a translation. Mirroring alone never met a box sized for English words. The same swap is made at the base and at the head, so only what the change added counts, and a problem seen only here says so ("… with Arabic text").
 - It is pseudo-localisation, not a translation. A desktop picture is kept for it on the before-and-after screen.
@@ -97,7 +100,7 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 - Fixed (found by the first CI run): **a folder is one repository however it is spelled.** The key behind allow-run, memory, caches and calibration comes from the real folder, so a folder reached through a link (macOS keeps `/var` and `/tmp` behind one) or by a Windows 8.3 short name is no longer taken for a second repository, one that was never allowed to run anything and had no memory.
 - Fixed (found by the same run): two calibration runs started in the same second got the same commits and so the same cases, with the first run's reports in the second. Each run now has its own.
 
-25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), plus 2 for the fixes above (155), 10 for finding which commit broke the tests (165), 20 for the attack pass, the plain review and the replay of your own history (185), 6 for function before and after (191) and 4 for the known limits (195), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
+25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), plus 2 for the fixes above (155), 10 for finding which commit broke the tests (165), 20 for the attack pass, the plain review and the replay of your own history (185), 6 for function before and after (191), 4 for the known limits (195) and 10 for scoring the attack pass, language-aware mutation and Arabic text (205), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
 
 ### Not built yet
 

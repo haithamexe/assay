@@ -104,8 +104,10 @@ if (!only || only === 'scoreboard') {
   const at = id => { const b = run.planted.bugs.find(x => x.id === id); return b ? { file: b.file, line: b.line } : null; };
   const report = (which, who, claims, tokens) => {
     const c = core.loadCase(which === 'planted' ? run.planted.case : run.control.case);
-    const lens = core.reviewers.reviewerFor(who).lens;
-    const list = claims.filter(Boolean).map(x => ({ title: 'Something is wrong here', lens, file: x.file, line: x.line, what: 'This line does something it should not, and here is why it matters.', source: 'reviewer:' + lens }));
+    const def = core.reviewers.reviewerFor(who);
+    const lens = def ? def.lens : 'Correctness';
+    const source = 'reviewer:' + (def ? lens : who);
+    const list = claims.filter(Boolean).map(x => ({ title: 'Something is wrong here', lens, file: x.file, line: x.line, what: 'This line does something it should not, and here is why it matters.', source }));
     const r = core.applyClaims(c.repo, c, list);
     core.saveCase(c);
     core.reviewers.recordSubmission(c, who, r, { round: 1, done: true, tokens, claims: list.length, disputes: [] });
@@ -122,7 +124,12 @@ if (!only || only === 'scoreboard') {
   report('control', 'Supply chain', [], 800);
   report('planted', 'Performance', [at('n-plus-one')], 3000);
   report('control', 'Performance', [], 1000);
-  await shot(`${only ? d.url : d.origin + '/'}#/reviewers?id=${rc0}&tab=score`, 'dashboard-scoreboard.png', { ...big, scheme: 'dark', h: 1500, ready: '.mx-row.mx-7' });
+  // the attack pass (no lens) and one plain review as the baseline
+  report('planted', 'Attack', [at('off-by-one'), at('swapped-args'), at('removed-guard'), at('html-sink')], 7200);
+  report('control', 'Attack', [], 1800);
+  report('planted', 'Plain', [at('hardcoded-key'), at('off-by-one'), at('sql-concat')], 9500);
+  report('control', 'Plain', [{ file: run.planted.bugs.find(b => b.id === 'swapped-args').file, line: 1 }], 3000);
+  await shot(`${only ? d.url : d.origin + '/'}#/reviewers?id=${rc0}&tab=score`, 'dashboard-scoreboard.png', { ...big, scheme: 'dark', h: 1790, ready: '.mx-row.mx-9' });
 }
 
 await d.close();
