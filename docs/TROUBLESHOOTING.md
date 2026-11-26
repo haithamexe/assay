@@ -177,7 +177,7 @@ Assay runs on **Windows, macOS and Linux** with Node 22 or newer and git. Everyt
 - `npm` is run through the shell (`cmd.exe`) because it is a script on Windows.
 - If a run is killed, a stray browser or server process can survive. Assay stops the whole process tree it started, including on timeout (`taskkill` on Windows, a process group elsewhere).
 
-**Everywhere**: Assay keeps its state in `~/.assay` (or `ASSAY_HOME`), writes files whole with mode 0600 where the system has modes, and reads git through `execFile` with argument lists, never a shell. Files in the repository use one line ending (LF) on every system (`.gitattributes`).
+**Everywhere**: Assay keeps its state in `~/.assay` (or `ASSAY_HOME`), writes files whole with mode 0600 where the system has modes, and reads git through `execFile` with argument lists, never a shell. A folder is one repository however it is reached: through a link, or by a Windows short name, it has the same settings, memory and caches. Files in the repository use one line ending (LF) on every system (`.gitattributes`).
 
 
 ## Where is everything?

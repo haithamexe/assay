@@ -17,8 +17,8 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 - `reviewers_plan` takes `include`; `assay reviewers` takes `--include`.
 
 **Windows, macOS and Linux**
-- Tested on Windows and on Linux (Node 22 in a container, with Chromium, as root), and written for macOS: browsers are found where each system puts them (more places on Linux and macOS), a browser started as root or in a container gets the flags it needs, and a repository's key is case-sensitive only where the file system is.
-- A CI workflow (`.github/workflows/ci.yml`) runs the suite on Ubuntu, macOS and Windows with Node 22 and 24. For now it runs only when started by hand; once the repository is public the push and pull request triggers can be switched on.
+- Tested on Windows, on Linux (Node 22 in a container, with Chromium, as root) and on macOS (by the CI workflow below, on Node 22 and 24): browsers are found where each system puts them (more places on Linux and macOS), a browser started as root or in a container gets the flags it needs, and a repository's key is case-sensitive only where the file system is.
+- A CI workflow (`.github/workflows/ci.yml`) runs the suite on Ubuntu, macOS and Windows with Node 22 and 24. It runs on every push to main and every pull request, and can be started by hand. Its first run, on all six combinations, found the two bugs listed under "In the core" below; the next run passed on all six.
 - `docs/TROUBLESHOOTING.md#platforms` says what differs on each system.
 
 **Reviewers** (`assay reviewers`, the *Reviewers* screen, the MCP tools `reviewers_plan` and `reviewer_brief`, [guide](docs/REVIEWERS.md))
