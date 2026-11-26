@@ -45,6 +45,13 @@ function proveFacts(r) {
   };
   const rows = [['Command', html`<code>${r.command}</code>`], ['At the base', run(r.base)], ['At the head', run(r.head)]];
   if (r.regressions.length) rows.push(['Now failing', r.regressions.slice(0, 5).join('; ')]);
+  if (r.culprit) {
+    const cu = r.culprit;
+    const short = h => h.slice(0, 7);
+    rows.push(['First failing commit', cu.commit
+      ? html`<code>${short(cu.commit)}</code>${cu.subject ? ` ${cu.subject}` : ''} · passed at <code>${short(cu.lastGood)}</code> · found with ${plural(cu.runs, 'run')} of ${plural(cu.commits, 'commit')}`
+      : `${cu.why || 'Not found.'}${cu.span > 1 && cu.span < cu.commits ? ` It is in one of the ${cu.span} commits after ${short(cu.lastGood)}.` : ''}`]);
+  }
   if (r.reverts.length) rows.push(['Reverting the change', `${r.reverts.filter(x => x.result === 'unnoticed').length} of ${r.reverts.length} tried: no test noticed`]);
   if (r.mutants.length) {
     const n = k => r.mutants.filter(m => m.result === k).length;

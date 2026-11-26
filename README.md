@@ -128,7 +128,7 @@ Reading a diff runs nothing. Running tests, a dev server or a browser happens on
 
 ## Status
 
-Built and tested (155 tests, including real `npm test` runs and a real browser):
+Built and tested (165 tests, including real `npm test` runs and a real browser):
 
 - the engine, CLI, MCP server and one-file HTML report
 - proof: tests at base and head, the revert test, mutation, with caching and a time budget
@@ -138,7 +138,7 @@ Built and tested (155 tests, including real `npm test` runs and a real browser):
 - reviewers: a panel planned and priced before it is spent, blind briefs, cross-examination, and a Stop hook
 - calibration: known bugs planted in a throwaway repository, the free checks and each reviewer scored, reviewers that earn nothing left out
 
-Not built yet, in this order of likelihood: replaying your own fix commits as a benchmark, the attack pass, function-level before/after, tracing a regression to one commit. [The roadmap and the decisions behind it →](docs/PROJECT.md)
+Not built yet, in this order of likelihood: replaying your own fix commits as a benchmark, the attack pass, function-level before/after. [The roadmap and the decisions behind it →](docs/PROJECT.md)
 
 The `demo/` folder has the clickable demo the dashboard was built from (sample data, nothing in it was measured) and two real sample reports.
 

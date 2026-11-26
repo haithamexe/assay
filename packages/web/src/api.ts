@@ -201,7 +201,7 @@ const ROUTES: Record<string, (ctx: Ctx, req: ApiReq) => unknown | Promise<unknow
   'POST /api/prove': (ctx, { body }) => {
     const c = own(ctx, body.case);
     if (!repoSettings(ctx.repo).allow) throw notAllowed(ctx, 'Running this project’s tests');
-    const opts = { mutants: int(body.mutants, 0, 30), reverts: int(body.reverts, 0, 10), budgetSeconds: int(body.budget, 30, 1800), fresh: body.fresh === true };
+    const opts = { mutants: int(body.mutants, 0, 30), reverts: int(body.reverts, 0, 10), budgetSeconds: int(body.budget, 30, 1800), bisect: body.bisect !== false, fresh: body.fresh === true };
     return ctx.jobs.start({ kind: 'prove', caseId: c.id, label: 'Running the project’s tests' }, async ({ say, signal }) => {
       const fresh = own(ctx, c.id);
       const report = await proveCase(fresh, { ...opts, signal, onProgress: say });

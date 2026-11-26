@@ -19,7 +19,7 @@ export interface Evidence {
   file?: string;
   line?: number;
   /** What `assay replay` re-runs: the commit to analyse again. */
-  replay?: { commit: string; run?: { kind: 'tests' | 'revert' | 'mutant' | 'look'; file?: string; line?: number; op?: string } };
+  replay?: { commit: string; run?: { kind: 'tests' | 'revert' | 'mutant' | 'look' | 'bisect'; file?: string; line?: number; op?: string; /** A bisect: the commit the tests passed at and the next one, where they fail. */ between?: { good: string; bad: string } } };
 }
 
 export interface DiffRow { t: ' ' | '+' | '-'; o: number | null; n: number | null; text: string; sig?: boolean }

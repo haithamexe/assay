@@ -56,7 +56,7 @@ A finding can be written with or without its `f-` prefix (`f-1a2b3c4d` or `1a2b3
 | Command | What it does |
 |---|---|
 | `assay allow-run` | Your opt-in for this repository. Prints what Assay found (test command, dev server, pages, browser) and what it will do. Settings are kept in `~/.assay/repos.json`. |
-| `assay prove [range]` | Runs the project's own tests at the base and at the head. A regression is proven. If the head is green, it also reverts risky hunks and mutates the changed lines. |
+| `assay prove [range]` | Runs the project's own tests at the base and at the head. A regression is proven, and traced to the first commit where the tests fail. If the head is green, it also reverts risky hunks and mutates the changed lines. |
 | `assay look [range]` | Opens the pages in a real browser at the base and at the head and reports what is new at the head. |
 
 `allow-run` options:
@@ -79,6 +79,7 @@ Running `allow-run` again changes only what you pass; the rest stays.
 | `--mutants <n>` | Deliberate changes to try, one test run each (default 8) |
 | `--reverts <n>` | Hunks to put back, one test run each (default 3) |
 | `--no-mutation`, `--no-revert` | Skip them |
+| `--no-bisect` | Don't search for the first commit where the tests fail (a regression is still proven; the search costs about log2 of the commits in test runs) |
 | `--budget <seconds>` | Stop starting new runs after this long (default 600). What was done is kept; run it again to continue. |
 | `--fresh` | Run again even where a result is cached |
 | `--fail-on …` | As above |

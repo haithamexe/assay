@@ -76,6 +76,18 @@ export function listRange(repo: string, base: string | null, head: string, max: 
   return { hashes: nomerge, merges: all.length - nomerge.length };
 }
 
+/**
+ * The commits after `base` up to and including `head`, along the first parent, oldest first. Null when that line doesn't start at the base
+ * (the base is on a side branch), because then "the one before" a commit in it isn't a commit of the range. A merge is one step on this line:
+ * the first parent is the branch that was merged into.
+ */
+export function firstParentChain(repo: string, base: string, head: string): string[] | null {
+  const chain = git(repo, ['rev-list', '--first-parent', '--reverse', `${base}..${head}`], { allowFail: true }).split('\n').filter(Boolean);
+  if (!chain.length || chain[chain.length - 1] !== head) return null;
+  const before = git(repo, ['rev-parse', '--verify', '--quiet', `${chain[0]}^`], { allowFail: true }).trim();
+  return before === base ? chain : null;
+}
+
 /** The file at a revision, or null if it isn't there (or is too big to read). */
 export function showFile(repo: string, rev: string, file: string): string | null {
   if (file.startsWith('-')) return null;

@@ -105,10 +105,10 @@ assay prove
 
 Assay exports clean copies of the base and the head of the range, runs your test command in each, and compares:
 
-- **A test that passed at the base and fails at the head** is a proven regression. It blocks the merge.
+- **A test that passed at the base and fails at the head** is a proven regression. It blocks the merge. Assay then runs the tests at the commits in between, halving the range, to name the **first commit where they fail** (`--no-bisect` skips that).
 - If the head is green, it **puts a risky change back** and runs the tests again. If nothing fails, that change is untested. It also **makes small deliberate changes** to the new lines (flip a comparison, swap `&&` for `||`, change a number) and reports the ones no test notices.
 
-Results are cached by commit, command and change, so running it again is instant, and a time budget (`--budget 600`) stops new runs and keeps what was done: run it again and it carries on. A long suite costs its length twice (base and head), plus once per revert and per deliberate change. Limit that with `--mutants 4 --reverts 1` or skip them with `--no-mutation --no-revert`.
+Results are cached by commit, command and change, so running it again is instant, and a time budget (`--budget 600`) stops new runs and keeps what was done: run it again and it carries on. A long suite costs its length twice (base and head), plus once per revert and per deliberate change, and about log2 of the commits (five commits take two runs) when a regression is traced to the commit that broke it. Limit that with `--mutants 4 --reverts 1` or skip them with `--no-mutation --no-revert` (and `--no-bisect` for the search for the commit).
 
 ### Open the pages in a browser
 

@@ -6,6 +6,11 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Added
 
+**Which commit broke it** (`assay prove`, MCP `prove`, the run panel)
+- When tests that passed at the base fail at the head, Assay now finds the **first commit in the range where they fail**: it runs the tests in the middle of the range and keeps halving, so 5 commits take 2 runs and 200 take 8. Every run is cached by commit, so asking again is free and a search that was stopped carries on.
+- The finding says "starting at `abc1234`", and the case gets `proof:bisect` evidence, proof like the rest, that replays by running the two commits again. It follows the first-parent line from the base (a merge is one step) and needs the tests to have passed at the base. It says so when it can't search (a red base, a base on a side branch) or stops short (a run in the middle that timed out or could not start), and then narrows to "one of N commits after `abc1234`".
+- `--no-bisect` (CLI) and `bisect: false` (MCP) skip it. The dashboard's run panel has a *First failing commit* row.
+
 **License**
 - Assay is under the MIT license ([LICENSE](LICENSE)); the repository is public, with GitHub's private vulnerability reporting switched on.
 
@@ -58,11 +63,11 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 - Fixed (found by the first CI run): **a folder is one repository however it is spelled.** The key behind allow-run, memory, caches and calibration comes from the real folder, so a folder reached through a link (macOS keeps `/var` and `/tmp` behind one) or by a Windows 8.3 short name is no longer taken for a second repository, one that was never allowed to run anything and had no memory.
 - Fixed (found by the same run): two calibration runs started in the same second got the same commits and so the same cases, with the first run's reports in the second. Each run now has its own.
 
-25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), plus 2 for the fixes above (155), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
+25 more tests for the dashboard (86 in all), 29 for memory (115), 24 for reviewers (139) and 14 for calibration (153), plus 2 for the fixes above (155) and 10 for finding which commit broke the tests (165), including the dashboard over real HTTP, a real test run stopped from the page, and the real page in a real browser.
 
 ### Not built yet
 
-Replaying the project's own fix commits as a benchmark, the plain-review baseline, the attack pass, function-level before/after, tracing a regression to one commit. See the [charter](docs/PROJECT.md#5-phases).
+Replaying the project's own fix commits as a benchmark, the plain-review baseline, the attack pass, function-level before/after. See the [charter](docs/PROJECT.md#5-phases).
 
 ## 0.1.0 — 2026-11-25
 

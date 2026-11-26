@@ -97,7 +97,9 @@ pg('add', '-A'); pg('commit', '-q', '-m', 'Base');
 const baseSha = pg('rev-parse', 'HEAD').trim();
 fs.writeFileSync(path.join(proj, 'src', 'add.js'), 'export const add = (a, b) => a - b;\n');
 pg('add', '-A'); pg('commit', '-q', '-m', 'Refactor add');
-const runProj = (...args: string[]): { code: number | null; out: string; err: string } => {
+fs.writeFileSync(path.join(proj, 'README.md'), '# p\n');
+pg('add', '-A'); pg('commit', '-q', '-m', 'Add a readme');
+const runProj =(...args: string[]): { code: number | null; out: string; err: string } => {
   const r = spawnSync(process.execPath, [bin, ...args, '--repo', proj], { env, encoding: 'utf8' });
   return { code: r.status, out: r.stdout, err: r.stderr };
 };
@@ -121,8 +123,11 @@ test('prove runs the project’s tests at base and head and blocks on the regres
   assert.match(r.out, /regression\s+add adds two numbers/);
   assert.match(r.out, /Blocked: 1 proven problem/);
   assert.match(r.out, /Tests that passed before this range now fail/);
+  assert.match(r.out, /first fail\s+[0-9a-f]{7} “Refactor add”\s+\(passed at [0-9a-f]{7}; found with 1 run of 2 commits\)/, 'it names the commit that broke the tests');
   const again = runProj('prove', `${baseSha}..HEAD`, '--no-mutation', '--no-revert');
   assert.match(again.out, /from the cache/);
+  assert.match(again.out, /found with 1 run of 2 commits, 1 from the cache/);
+  assert.doesNotMatch(runProj('prove', `${baseSha}..HEAD`, '--no-mutation', '--no-revert', '--no-bisect').out, /first fail/, '--no-bisect leaves the search out');
   assert.equal(execFileSync('git', ['-C', proj, 'status', '--porcelain'], { encoding: 'utf8' }).trim(), '', 'the repository was only read');
 });
 

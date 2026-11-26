@@ -5,10 +5,12 @@ import type { RawFinding } from '../checks/types.js';
 import { redactSecrets } from '../checks/secrets.js';
 import { sha } from '../config.js';
 import { commitDiff, type FileDiff, type Hunk } from '../diff.js';
+import { commitInfo, firstParentChain, resolveRev } from '../git.js';
 import { isSourcePath } from '../lang.js';
 import { saveCase } from '../store.js';
 import type { Case, Evidence, Finding, RunRecord, Severity } from '../types.js';
 import { applyRuns } from './apply.js';
+import { searchFirstBad, type Judged } from './bisect.js';
 import { applyMutant, mutantsFor, pickMutants, revertHunk, type Mutant } from './mutate.js';
 import { showedFailure } from './parse.js';
 import { cacheRun, cachedRun, detectCommand, runCommand, type RunResult, type TestCommand } from './runner.js';
@@ -22,6 +24,8 @@ export interface ProveOptions {
   mutants?: number;
   /** Stop starting new runs after this long. What was cached is kept, so the next call picks up where this one stopped. Default 600. */
   budgetSeconds?: number;
+  /** When tests that passed at the base fail at the head, find the first commit in the range where they fail (at most log2 of the commits, each run cached). Default true. */
+  bisect?: boolean;
   /** Run again even where a result is cached. */
   fresh?: boolean;
   /** Stop: the run in progress is killed and nothing from it is kept; what finished before it stays cached. */
@@ -30,6 +34,24 @@ export interface ProveOptions {
 }
 
 interface RunSummary { exit: number | null; secs: number; failed: number; passed: number | null; timedOut: boolean; cached: boolean }
+/** Which commit of the range broke the tests (D49). */
+export interface Culprit {
+  /** The first commit in the range where the tests fail, or null when the search stopped, or could not start, before it was down to one. */
+  commit: string | null;
+  subject: string | null;
+  /** The newest commit known to pass and the oldest known to fail. With a `commit` these are its parent and itself. */
+  lastGood: string;
+  firstBad: string;
+  /** How many commits are between them, the failing one included (1 when it is found). */
+  span: number;
+  /** Commits in the range, and how many test runs the search took (the ones from the cache included). */
+  commits: number;
+  runs: number;
+  cached: number;
+  /** Why there is no single commit. */
+  why?: string;
+}
+
 export interface ProofReport {
   ran: boolean;
   reason?: string;
@@ -37,6 +59,8 @@ export interface ProofReport {
   base: RunSummary | null;
   head: RunSummary | null;
   regressions: string[];
+  /** Set when tests that passed at the base fail at the head and the range has more than one commit. */
+  culprit?: Culprit;
   reverts: Array<{ file: string; line: number; result: 'covered' | 'unnoticed' | 'skipped'; why?: string }>;
   mutants: Array<{ file: string; line: number; op: string; result: 'killed' | 'survived' | 'invalid' | 'skipped' }>;
   secs: number;
@@ -45,17 +69,24 @@ export interface ProofReport {
 
 const summary = (r: RunResult, cached: boolean): RunSummary => ({ exit: r.exit, secs: r.secs, failed: r.failedCount ?? r.failed.length, passed: r.passedCount, timedOut: r.timedOut, cached });
 const green = (r: RunResult): boolean => r.exit === 0 && !r.timedOut && !r.error;
+/** The tests failed (not "could not be run"): a bad exit, or a failure the output showed. */
+const red = (r: RunResult): boolean => r.exit !== 0 || (r.failedCount ?? 0) > 0;
 const rowAt = (f: FileDiff, line: number): boolean => f.hunks.some(h => h.lines.some(l => l.n === line && l.t !== '-'));
 const hunkAt = (f: FileDiff, line: number): Hunk | undefined => f.hunks.find(h => h.lines.some(l => l.n === line && l.t === '+'));
 const proofId = (head: string, ...parts: string[]): string => `r-${sha([head, ...parts].join('\0'), 8)}`;
 
-/** Where to hang a finding that is about the whole range: a line the failure points at, else the biggest changed source file. */
-function anchorFor(net: FileDiff[], refs: Array<{ file: string; line: number }>): { file: FileDiff; line: number } | null {
+/**
+ * Where to hang a finding that is about the whole range: a line the failure points at, else the biggest changed source file
+ * (among the files the commit that broke it changed, when that is known and any of them is still in the range's diff).
+ */
+function anchorFor(net: FileDiff[], refs: Array<{ file: string; line: number }>, prefer?: Set<string>): { file: FileDiff; line: number } | null {
   for (const r of refs) {
     const f = net.find(x => x.path === r.file || r.file.endsWith(`/${x.path}`) || x.path.endsWith(`/${r.file}`));
     if (f && rowAt(f, r.line)) return { file: f, line: r.line };
   }
-  const usable = net.filter(f => !f.binary && f.status !== 'deleted' && f.hunks.length);
+  const all = net.filter(f => !f.binary && f.status !== 'deleted' && f.hunks.length);
+  const near = prefer?.size ? all.filter(f => prefer.has(f.path)) : [];
+  const usable = near.length ? near : all;
   const src = usable.filter(f => isSourcePath(f.path)).sort((a, b) => b.additions - a.additions)[0] ?? usable[0];
   const row = src?.hunks.flatMap(h => h.lines).find(l => l.t === '+' && l.n !== null);
   return src && row && row.n !== null ? { file: src, line: row.n } : null;
@@ -123,11 +154,45 @@ export async function proveCase(c: Case, opts: ProveOptions = {}): Promise<Proof
     report.base = baseRes ? summary(baseRes.r, baseRes.cached) : null;
     report.head = summary(headGot.r, headGot.cached);
     const hr = headGot.r;
-    const headRed = hr.exit !== 0 || (hr.failedCount ?? 0) > 0;
+    const headRed = red(hr);
     if (hr.error) { report.reason = `The test command could not start: ${hr.error}`; report.ran = false; return report; }
     if (hr.timedOut) report.reason = `The tests took longer than ${timeout} s at the head, so nothing could be concluded.`;
 
     const testRec: RunRecord = { id: proofId(c.head, 'tests', cmd.text), kind: 'tests', at: now, secs: hr.secs + (baseRes?.r.secs ?? 0), command: cmd.text, summary: '', findings: [], signals: [] };
+    /* Which commit broke it (D49): the tests at the commits in between, halving the range, every run cached by commit. */
+    const seen = new Map<string, RunResult>([[c.head, hr]]);
+    let bisectSecs = 0;
+    const traceCulprit = async (baseGreen: boolean): Promise<Culprit | undefined> => {
+      const chain = firstParentChain(c.repo, c.base!, c.head);
+      if (chain && chain.length < 2) return undefined;
+      const unsearched = (why: string): Culprit => ({ commit: null, subject: null, lastGood: c.base!, firstBad: c.head, span: chain?.length ?? 0, commits: chain?.length ?? 0, runs: 0, cached: 0, why });
+      if (!chain) return unsearched('The range isn’t a straight line from its base (the base is on a side branch), so it can’t be searched commit by commit.');
+      if (!baseGreen) return unsearched('The tests already failed at the base, so which commit first made them fail can’t be told.');
+      let runs = 0;
+      let cached = 0;
+      const judge = async (commit: string): Promise<Judged> => {
+        say(`Which commit broke it? Running ${cmd.text} at ${commit.slice(0, 7)}…`);
+        const made: { dir: string | null } = { dir: null };
+        const got = await run(commit, 'tests', () => { made.dir = exportTree(c.repo, commit, 'bisect'); trees.push(made.dir); linkDependencies(c.repo, made.dir); return made.dir; });
+        if (made.dir) { removeTree(made.dir); trees.splice(trees.indexOf(made.dir), 1); }
+        if (got === 'budget') return 'stop';
+        if (got === 'cannot') return 'unclear';
+        runs++;
+        if (got.cached) cached++; else bisectSecs += got.r.secs;
+        seen.set(commit, got.r);
+        if (got.r.timedOut || got.r.error) return 'unclear';
+        return red(got.r) ? 'bad' : 'good';
+      };
+      const s = await searchFirstBad(chain, judge);
+      const lastGood = s.lo < 0 ? c.base! : chain[s.lo];
+      const firstBad = chain[s.hi];
+      const out: Culprit = { commit: s.found ? firstBad : null, subject: null, lastGood, firstBad, span: s.hi - s.lo, commits: chain.length, runs, cached };
+      if (s.found) out.subject = commitInfo(c.repo, [firstBad])[0]?.subject ?? null;
+      else if (s.stopped === 'stop') { report.stopped = outOfTime('while looking for the commit that broke it'); out.why = 'The search was stopped before it was down to one commit: run it again to carry on.'; }
+      else out.why = 'The tests could not be judged at a commit in the middle of the range (they timed out or could not start there), so the search stopped short.';
+      return out;
+    };
+
     if (baseRes && !hr.timedOut && !baseRes.r.timedOut) {
       const br = baseRes.r;
       const baseNames = new Set(br.failed);
@@ -135,23 +200,41 @@ export async function proveCase(c: Case, opts: ProveOptions = {}): Promise<Proof
       const regressed = green(br) ? headRed : names.length > 0 && showedFailure(hr);
       if (regressed) {
         report.regressions = names.length ? names : ['(the test command failed)'];
-        const a = anchorFor(net, hr.refs);
+        const culprit = opts.bisect === false ? undefined : await traceCulprit(green(br));
+        if (culprit) report.culprit = culprit;
+        const touched = culprit?.commit ? new Set(commitDiff(c.repo, culprit.commit, culprit.lastGood).map(f => f.path)) : undefined;
+        const a = anchorFor(net, hr.refs, touched);
         if (a) {
           const shown = report.regressions.slice(0, 5);
+          const at = (h: string): string => h.slice(0, 7);
+          const named = culprit?.commit && culprit.subject ? ` (“${culprit.subject}”)` : '';
+          const failingThere = culprit?.commit ? (seen.get(culprit.commit)?.failed ?? []).slice(0, 3) : [];
           testRec.findings.push(make({
-            check: 'proof', key: 'tests-regression', title: `Tests that passed before this range now fail${names.length ? ` (${names.length})` : ''}`, lens: 'Correctness', severity: 'high',
+            check: 'proof', key: 'tests-regression', title: `Tests that passed before this range now fail${names.length ? ` (${names.length})` : ''}${culprit?.commit ? `, starting at ${at(culprit.commit)}` : ''}`, lens: 'Correctness', severity: 'high',
             file: a.file.path, line: a.line, side: 'added', text: textAt(a.file, a.line),
             evidence: [
               { kind: 'test-fail', source: 'proof:tests', what: `${cmd.text} passed at ${c.base!.slice(0, 7)} and failed at ${c.head.slice(0, 7)}. Failing: ${shown.join('; ')}${report.regressions.length > 5 ? `; and ${report.regressions.length - 5} more` : ''}`, run: { kind: 'tests' } },
-              { kind: 'test-fail', source: 'proof:tests-output', what: `The end of the output at ${c.head.slice(0, 7)}: ${hr.tail.split('\n').slice(-6).join(' | ').slice(0, 400)}`, run: { kind: 'tests' } }
+              { kind: 'test-fail', source: 'proof:tests-output', what: `The end of the output at ${c.head.slice(0, 7)}: ${hr.tail.split('\n').slice(-6).join(' | ').slice(0, 400)}`, run: { kind: 'tests' } },
+              ...(culprit?.commit ? [{
+                kind: 'test-fail' as const, source: 'proof:bisect',
+                what: `${cmd.text} passed at ${at(culprit.lastGood)} and failed at ${at(culprit.commit)}${named}, the first commit in the range where it fails. Found by running it at ${culprit.runs} commit${culprit.runs === 1 ? '' : 's'} of the ${culprit.commits} in the range${culprit.cached ? ` (${culprit.cached} from the cache)` : ''}.${failingThere.length ? ` Failing there: ${failingThere.join('; ')}.` : ''}`,
+                run: { kind: 'bisect' as const, between: { good: culprit.lastGood, bad: culprit.commit } }
+              }] : [])
             ],
-            observed: [`${cmd.text} exited 0 at ${c.base!.slice(0, 7)} and ${hr.exit} at ${c.head.slice(0, 7)}.`, ...shown.map(n => `Failing: ${n}`)],
-            inferred: ['One of the changes in this range probably broke it. The timeline shows which commit; Assay can check each one.'], ref: 'Regression'
+            observed: [
+              `${cmd.text} exited 0 at ${c.base!.slice(0, 7)} and ${hr.exit} at ${c.head.slice(0, 7)}.`, ...shown.map(n => `Failing: ${n}`),
+              ...(culprit?.commit ? [`${cmd.text} passed at ${at(culprit.lastGood)} and fails at ${at(culprit.commit)}${named}, the first commit in the range where it fails.`]
+                : culprit && culprit.span > 1 && culprit.span < culprit.commits ? [`The tests passed at ${at(culprit.lastGood)} and fail at ${at(culprit.firstBad)}: the change is in one of the ${culprit.span} commits between them.`] : [])
+            ],
+            inferred: [culprit?.commit
+              ? `The change in ${at(culprit.commit)} probably broke it: it is the first commit where the tests fail.`
+              : `One of the changes in this range probably broke it.${culprit?.why ? ` ${culprit.why}` : opts.bisect === false ? ' Prove again without --no-bisect to find which one.' : ''}`], ref: 'Regression'
           }));
         }
       }
     }
-    testRec.summary = `${cmd.text}: base ${report.base ? (report.base.exit === 0 ? 'passed' : 'failed') : 'not run'}, head ${headRed ? 'failed' : 'passed'} (${hr.secs} s)`;
+    testRec.secs += bisectSecs;
+    testRec.summary = `${cmd.text}: base ${report.base ? (report.base.exit === 0 ? 'passed' : 'failed') : 'not run'}, head ${headRed ? 'failed' : 'passed'} (${hr.secs} s)${report.culprit?.commit ? `; first failing commit ${report.culprit.commit.slice(0, 7)}` : ''}`;
     records.push(testRec);
 
     /* 2 and 3 need a green head: otherwise "no test failed" can't be told from "tests were already failing" */
@@ -270,6 +353,15 @@ export async function replayRun(c: Case, ev: Evidence): Promise<{ reproduced: bo
   const dirs: string[] = [];
   const checkout = (commit: string, label: string): string => { const d = exportTree(c.repo, commit, label); dirs.push(d); linkDependencies(c.repo, d); return d; };
   try {
+    if (run.kind === 'bisect') {
+      const { good, bad } = run.between ?? {};
+      if (!good || !bad) return { reproduced: false, detail: 'This evidence doesn’t say which two commits to run.' };
+      try { resolveRev(c.repo, good); resolveRev(c.repo, bad); } catch { return { reproduced: false, detail: 'One of the two commits is no longer in the repository.' }; }
+      const g = await runCommand(cmd, checkout(good, 'good'), { timeoutSec: timeout });
+      const b = await runCommand(cmd, checkout(bad, 'bad'), { timeoutSec: timeout });
+      const again = green(g) && !b.timedOut && !b.error && red(b);
+      return { reproduced: again, detail: again ? `Ran ${cmd.text} again at ${good.slice(0, 7)} and ${bad.slice(0, 7)}: it passed at the first and failed at the second.` : `Ran ${cmd.text} again: it ${green(g) ? 'passed' : 'failed'} at ${good.slice(0, 7)} and ${green(b) ? 'passed' : b.timedOut ? 'timed out' : 'failed'} at ${bad.slice(0, 7)}.` };
+    }
     if (run.kind === 'tests') {
       const b = c.base ? await runCommand(cmd, checkout(c.base, 'base'), { timeoutSec: timeout }) : null;
       const h = await runCommand(cmd, checkout(c.head, 'head'), { timeoutSec: timeout });

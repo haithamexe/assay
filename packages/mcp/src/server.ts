@@ -57,6 +57,9 @@ function proofLines(r: ProofReport): string {
   const run = (name: string, s: ProofReport['head']): string => (s ? `${name} ${s.timedOut ? 'timed out' : s.exit === 0 ? 'passed' : 'failed'} (${s.secs} s${s.cached ? ', cached' : ''})` : `${name} not run`);
   const l = [`Proof: ${r.command} · ${run('base', r.base)} · ${run('head', r.head)}`];
   if (r.regressions.length) l.push(`Regression: ${r.regressions.slice(0, 4).join('; ')}`);
+  const cu = r.culprit;
+  if (cu?.commit) l.push(`First failing commit: ${cu.commit.slice(0, 7)}${cu.subject ? ` “${cu.subject}”` : ''}; the tests passed at ${cu.lastGood.slice(0, 7)} (found with ${cu.runs} run${cu.runs === 1 ? '' : 's'} of ${cu.commits} commits)`);
+  else if (cu) l.push(`First failing commit: not found. ${cu.why ?? ''}${cu.span > 1 && cu.span < cu.commits ? ` It is in one of the ${cu.span} commits after ${cu.lastGood.slice(0, 7)}.` : ''}`.trim());
   if (r.reverts.length) l.push(`Revert test: ${r.reverts.filter(x => x.result === 'unnoticed').length} of ${r.reverts.length} reverted hunks went unnoticed by the tests`);
   const judged = r.mutants.filter(m => m.result === 'killed' || m.result === 'survived');
   if (r.mutants.length) l.push(`Mutation: ${judged.filter(m => m.result === 'killed').length} of ${judged.length} deliberate changes were noticed`);
@@ -246,16 +249,17 @@ export function createServer(version = '0.1.0'): McpServer {
       case: z.string(),
       mutants: z.number().int().min(0).max(12).optional().describe('Deliberate changes to try, each one test run (default 8, 0 = skip)'),
       reverts: z.number().int().min(0).max(5).optional().describe('Hunks to try putting back, each one test run (default 3, 0 = skip)'),
-      budget_seconds: z.number().int().min(10).max(600).optional().describe('Stop starting new runs after this long (default 90)')
+      budget_seconds: z.number().int().min(10).max(600).optional().describe('Stop starting new runs after this long (default 90)'),
+      bisect: z.boolean().optional().describe('When tests that passed now fail, find the first commit where they fail, by running them at about log2 of the commits (default true, false = skip)')
     },
     annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false }
-  }, async ({ case: id, mutants, reverts, budget_seconds }) => {
+  }, async ({ case: id, mutants, reverts, budget_seconds, bisect }) => {
     try {
       const c = getCase(id);
       if (!isAllowed(c.repo)) return fail('A person has to allow this first: they run  assay allow-run  in the repository. You can’t turn it on.');
-      const r = await proveCase(c, { mutants, reverts, budgetSeconds: budget_seconds ?? 90 });
+      const r = await proveCase(c, { mutants, reverts, bisect, budgetSeconds: budget_seconds ?? 90 });
       const s = summary(c, false);
-      return text(`${proofLines(r)}\n\n${s.text}`, { ...s.data, proof: { ran: r.ran, regressions: r.regressions, stopped: r.stopped ?? null } });
+      return text(`${proofLines(r)}\n\n${s.text}`, { ...s.data, proof: { ran: r.ran, regressions: r.regressions, firstFailingCommit: r.culprit?.commit ?? null, stopped: r.stopped ?? null } });
     } catch (e) { return fail((e as Error).message); }
   });
 

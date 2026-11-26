@@ -127,7 +127,7 @@ A page on the internet must not be able to talk to this server, and a mistake in
 - *Stop* can't interrupt a page that is already being measured, only the next one.
 - The pictures are as taken at 1280 × 800 (desktop) and 390 × 844 (phone), as loaded and mirrored on desktop, in the light scheme.
 - It needs a current browser (it uses ES modules and `<dialog>`).
-- *Find where it broke* (tracing a regression to one commit), the attack pass and the scoreboard are not built yet.
+- The attack pass is not built yet.
 - The screen shows one panel per case: a new budget with a kept panel says so and asks you to plan again (that starts the panel over).
 - Memory can add suggestions from history here, but a pattern of your own (`assay memory add --pattern`), a pack file (`assay memory import`) and renaming a suggestion are command line only.
 

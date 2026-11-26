@@ -20,7 +20,7 @@ export { briefOf } from './brief.js';
 export { replayEvidence } from './replay.js';
 export { reportHTML } from './report.js';
 export { proveCase, replayRun } from './proof/prove.js';
-export type { ProofReport, ProveOptions } from './proof/prove.js';
+export type { Culprit, ProofReport, ProveOptions } from './proof/prove.js';
 export { repoSettings, setRepoSettings, isAllowed } from './proof/settings.js';
 export type { RepoSettings } from './proof/settings.js';
 export { detectCommand } from './proof/runner.js';

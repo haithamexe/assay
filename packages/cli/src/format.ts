@@ -49,6 +49,9 @@ export function proofText(r: ProofReport): string {
   const run = (name: string, s: ProofReport['head']): string => (s ? `${name} ${s.timedOut ? yellow('timed out') : s.exit === 0 ? green('passed') : red('failed')} ${dim(`(${s.secs} s${s.cached ? ', from the cache' : ''})`)}` : `${name} ${dim('not run')}`);
   l.push(`  ${run('base', r.base)}   ${run('head', r.head)}`);
   if (r.regressions.length) l.push(`  ${red('regression')}  ${r.regressions.slice(0, 4).join('; ')}${r.regressions.length > 4 ? `; and ${r.regressions.length - 4} more` : ''}`);
+  const cu = r.culprit;
+  if (cu?.commit) l.push(`  first fail  ${red(cu.commit.slice(0, 7))}${cu.subject ? ` “${cu.subject}”` : ''}  ${dim(`(passed at ${cu.lastGood.slice(0, 7)}; found with ${cu.runs} run${cu.runs === 1 ? '' : 's'} of ${cu.commits} commits${cu.cached ? `, ${cu.cached} from the cache` : ''})`)}`);
+  else if (cu) l.push(`  first fail  ${dim(`${cu.why ?? 'not found'}${cu.span > 1 && cu.span < cu.commits ? ` It is in one of the ${cu.span} commits after ${cu.lastGood.slice(0, 7)}.` : ''}`)}`);
   if (r.reverts.length) l.push(`  revert test  ${r.reverts.filter(x => x.result === 'unnoticed').length} of ${r.reverts.length} reverted hunks went unnoticed by the tests${r.reverts.some(x => x.result === 'skipped') ? dim(` (${r.reverts.filter(x => x.result === 'skipped').length} couldn’t be judged)`) : ''}`);
   const judged = r.mutants.filter(m => m.result === 'killed' || m.result === 'survived');
   if (r.mutants.length) l.push(`  mutation     ${judged.filter(m => m.result === 'killed').length} of ${judged.length} deliberate changes were noticed${r.mutants.some(m => m.result === 'invalid') ? dim(` (${r.mutants.filter(m => m.result === 'invalid').length} didn’t compile, not counted)`) : ''}`);
