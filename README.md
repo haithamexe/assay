@@ -128,7 +128,7 @@ Reading a diff runs nothing. Running tests, a dev server or a browser happens on
 
 ## Status
 
-Built and tested (191 tests, including real `npm test` runs and a real browser):
+Built and tested (195 tests, including real `npm test` runs and a real browser):
 
 - the engine, CLI, MCP server and one-file HTML report
 - proof: tests at base and head, the revert test, mutation, with caching and a time budget

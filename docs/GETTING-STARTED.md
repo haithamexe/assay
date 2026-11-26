@@ -10,7 +10,7 @@ From nothing to a reviewed branch in a few minutes. Back to the [README](../READ
 | **Node.js 22 or newer** | `node -v` (memory needs 22.13) |
 | **git** | Assay reads your repository through git |
 | A Chromium-based browser | Only for `assay look`. Chrome, Edge, Brave or Chromium, already installed. Edge is on every Windows 10 and 11; Chrome on most Macs and Linux desktops. |
-| Your project's test command | Only for `assay prove`. `npm test`, `pytest`, `go test` and `cargo test` are found by themselves; anything else you tell it. |
+| Your project's test command | Only for `assay prove`. `npm test`, `pytest`, `go test`, `cargo test`, `dotnet test`, `mvn test`, `gradle test`, `deno test`, `bundle exec rspec` and `make test` are found by themselves; anything else you tell it. |
 
 No account, no API key, no network.
 

@@ -49,11 +49,28 @@ function stillPresent(f: Finding, headText: string | null): boolean {
   return f.anchor.text.startsWith('sha:') ? lineHashes(headText).has(f.anchor.text.slice(4)) : headText.includes(f.anchor.text);
 }
 
-function markPresence(repo: string, head: string, findings: Finding[]): void {
+/**
+ * Where each file the range renamed ended up, following every commit's renames in order (a file renamed twice, or added and then renamed, ends at
+ * its last name). A finding is looked for in the file it became, so a rename alone doesn't make it look fixed.
+ */
+function renamesIn(repo: string, base: string | null, head: string, count: number): Map<string, string> {
+  const out = git(repo, ['log', '-M', '--name-status', '--format=%H', '--reverse', '--no-merges', ...(base ? [`${base}..${head}`] : [`--max-count=${count}`, head])], { allowFail: true });
+  const to = new Map<string, string>();
+  for (const line of out.split('\n')) {
+    const m = /^R\d*\t([^\t]+)\t([^\t]+)$/.exec(line);
+    if (!m) continue;
+    for (const [from, now] of to) if (now === m[1]) to.set(from, m[2]);
+    to.set(m[1], m[2]);
+  }
+  return to;
+}
+
+function markPresence(repo: string, head: string, findings: Finding[], renamed: Map<string, string> = new Map()): void {
   const byFile = new Map<string, string | null>();
   for (const f of findings) {
-    if (!byFile.has(f.file)) byFile.set(f.file, showFile(repo, head, f.file));
-    f.present = stillPresent(f, byFile.get(f.file) ?? null);
+    const at = renamed.get(f.file) ?? f.file;
+    if (!byFile.has(at)) byFile.set(at, showFile(repo, head, at));
+    f.present = stillPresent(f, byFile.get(at) ?? null);
   }
 }
 
@@ -92,7 +109,7 @@ export function openCase(opts: OpenOptions): Case {
   applyRuns(c);
   if (c.claims.length) applyClaims(repo, c, []);
   findings.sort((a, b) => b.risk - a.risk || a.id.localeCompare(b.id));
-  markPresence(repo, head, c.findings);
+  markPresence(repo, head, c.findings, renamesIn(repo, base, head, hashes.length));
   saveCase(c);
   return c;
 }

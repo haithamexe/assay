@@ -50,6 +50,19 @@ export function detectCommand(root: string, custom?: string): TestCommand | null
   }
   if (has(root, 'go.mod')) return { text: 'go test ./...', label: 'go test ./...', shell: false, file: 'go', args: ['test', './...'] };
   if (has(root, 'Cargo.toml')) return { text: 'cargo test', label: 'cargo test', shell: false, file: 'cargo', args: ['test'], env: { CARGO_TARGET_DIR: assayPath('work', 'cargo-target') } };
+  // Fixed words only, never anything from a request. Those that are scripts on Windows (mvn, gradle, bundle, make) go through the shell.
+  let names: string[] = [];
+  try { names = fs.readdirSync(root); } catch { /* no root, no runner */ }
+  if (names.some(n => /\.(?:sln|csproj|fsproj)$/i.test(n))) return { text: 'dotnet test', label: 'dotnet test', shell: false, file: 'dotnet', args: ['test', '--nologo', '--verbosity', 'minimal'] };
+  if (has(root, 'pom.xml')) return { text: 'mvn -B -q test', label: 'mvn -B -q test', shell: true };
+  if (names.some(n => /^(?:build|settings)\.gradle(?:\.kts)?$/.test(n))) {
+    const wrapper = process.platform === 'win32' ? has(root, 'gradlew.bat') : has(root, 'gradlew');
+    const text = wrapper ? (process.platform === 'win32' ? 'gradlew.bat test --console=plain' : './gradlew test --console=plain') : 'gradle test --console=plain';
+    return { text, label: text, shell: true };
+  }
+  if (has(root, 'deno.json') || has(root, 'deno.jsonc')) return { text: 'deno test', label: 'deno test', shell: false, file: 'deno', args: ['test'] };
+  if (has(root, 'Gemfile') && fs.existsSync(path.join(root, 'spec'))) return { text: 'bundle exec rspec', label: 'bundle exec rspec', shell: true };
+  if (/^test\s*:/m.test(read(root, 'Makefile'))) return { text: 'make test', label: 'make test', shell: true };
   return null;
 }
 

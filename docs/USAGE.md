@@ -63,7 +63,7 @@ A finding can be written with or without its `f-` prefix (`f-1a2b3c4d` or `1a2b3
 
 | Option | |
 |---|---|
-| `--command "<cmd>"` | The test command to run, typed by you and run exactly as typed through the shell. Without it, Assay finds one: `npm`/`pnpm`/`yarn`/`bun test` when `package.json` has a `test` script, `python -m pytest` when it looks like a pytest project, `go test ./...`, `cargo test`. |
+| `--command "<cmd>"` | The test command to run, typed by you and run exactly as typed through the shell. Without it, Assay finds one: `npm`/`pnpm`/`yarn`/`bun test` when `package.json` has a `test` script, `python -m pytest` when it looks like a pytest project, `go test ./...`, `cargo test`, `dotnet test`, `mvn -B -q test`, Gradle, `deno test`, `bundle exec rspec`, `make test`. |
 | `--timeout <seconds>` | How long one run may take (default 300) |
 | `--serve "<cmd>"` | The command that starts the dev server for `look`. `{port}` is replaced and `PORT` is set. Without it: `dev` or `start` from `package.json`, else the HTML files are served as they are. |
 | `--pages "/,/cart"` | Paths to open (default: the HTML files the range changed, or `/` for a dev server) |

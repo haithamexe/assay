@@ -26,7 +26,7 @@ An agent can't do this on purpose. `assay allow-run --off` undoes it.
 
 ## "No test command found"
 
-Assay finds `npm`/`pnpm`/`yarn`/`bun test` (a `test` script in `package.json`), `python -m pytest`, `go test ./...` and `cargo test`. For anything else:
+Assay finds `npm`/`pnpm`/`yarn`/`bun test` (a `test` script in `package.json`), `python -m pytest`, `go test ./...`, `cargo test`, `dotnet test`, `mvn -B -q test`, Gradle, `deno test`, `bundle exec rspec` (with a `spec` folder) and `make test` (with a `test:` target). The failing test names are read from the output of the first group; for the rest a failure is reported as the command failing. For anything else:
 
 ```bash
 assay allow-run --command "make test"
