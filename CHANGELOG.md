@@ -6,6 +6,10 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Added
 
+**Mutation reads each file in its own language**
+- The deliberate changes `assay prove` makes to see whether the tests notice used one set of operators and one idea of a string for every language. Now each file is read as its own language: `===` only in JavaScript, `and`, `or`, `not`, `is None` and `True` in Python, `if !ok {` with no parentheses in Go and Rust, a Rust lifetime is not a string, a `#` is a comment in Python and an attribute in Rust, and SQL is not mutated.
+- A comment, the inside of a string, a block comment or a docstring, an import, an annotation, a `+` that joins text and an array length are never mutated, so fewer runs are wasted on changes that don't compile.
+
 **The attack pass is scored** (`assay calibrate`, the Scoreboard, [guide](docs/CALIBRATION.md#the-attack-pass-scored))
 - A calibration run now plans the attack pass and scores it: a row (*Attack pass (no lens)*) and an *Atk* column in the matrix. It has no lens, so every planted bug is a chance, and its false alarms are its flags on the clean twin.
 - The advice says what it adds: how many of the bugs it flagged nothing else flagged (not the free checks, not any lens), so you can judge whether the 80k budget it needs is earned on your project.

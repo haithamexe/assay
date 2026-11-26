@@ -12,7 +12,7 @@ import type { Case, Evidence, Finding, RunRecord, Severity } from '../types.js';
 import { applyRuns } from './apply.js';
 import { searchFirstBad, type Judged } from './bisect.js';
 import { callText, candidates, differences, inputsFor, langOf, runFunction, type Fn } from './behave.js';
-import { applyMutant, mutantsFor, pickMutants, revertHunk, type Mutant } from './mutate.js';
+import { applyMutant, codeLines, mutantsFor, pickMutants, revertHunk, type Mutant } from './mutate.js';
 import { showedFailure } from './parse.js';
 import { cacheRun, cachedRun, detectCommand, runCommand, type RunResult, type TestCommand } from './runner.js';
 import { repoSettings } from './settings.js';
@@ -454,7 +454,7 @@ export async function replayRun(c: Case, ev: Evidence): Promise<{ reproduced: bo
       if (!hunk) return { reproduced: false, detail: 'The hunk is not in the range any more.' };
       original = revertHunk(dir, file.path, hunk);
     } else {
-      const m = mutantsFor(file.path, run.line, textAt(file, run.line)).find(x => x.op === run.op);
+      const m = mutantsFor(file.path, run.line, textAt(file, run.line), codeLines(file).get(run.line)).find(x => x.op === run.op);
       if (!m) return { reproduced: false, detail: 'The line no longer allows that change.' };
       original = applyMutant(dir, m);
     }
