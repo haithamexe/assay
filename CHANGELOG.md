@@ -1,8 +1,10 @@
 # Changelog
 
-All notable changes. Back to the [README](README.md). The format follows [Keep a Changelog](https://keepachangelog.com); the project is not versioned for release yet.
+All notable changes. Back to the [README](README.md). The format follows [Keep a Changelog](https://keepachangelog.com); versions follow [Semantic Versioning](https://semver.org) and each release is a git tag (`v0.1.0`). Before 1.0 anything may still change between minor versions.
 
-## Unreleased
+## 0.1.0 — 2026-11-27
+
+The first release: the engine and its free checks, built-in proof, browser checks, the dashboard, memory, reviewers and their scoreboard. Everything below was built after the first version of 2026-11-25, which is kept at the end of this entry.
 
 ### Added
 
@@ -104,13 +106,13 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Not built yet
 
-Nothing is queued: what is left is the known limits in the [charter](docs/PROJECT.md#7-where-it-stands).
+Nothing is queued: what is left is the known limits in the [charter](docs/PROJECT.md#7-where-it-stands). Not yet checked on macOS or Node 24 since GitHub Actions ran out of quota for this account; the suite passes on Windows and on Linux (Node 22).
 
-## 0.1.0 — 2026-11-25
+### The first version, 2026-11-25
 
-The first version: the engine, proof and browser checks.
+The engine, proof and browser checks.
 
-### Added
+#### Added
 
 **The engine and the free checks**
 - Reviews a branch or a range of commits by reading git only: committed secrets, risky patterns (HTML injection, `eval`, shell commands, SQL built from text, certificate checks off, deserialisation, CORS `*`, weak hashes and randomness, unchecked tokens, focused or skipped tests), a removed guard or assertion, dependency changes (look-alike names, unpinned versions, install scripts) and logic that changed with no test. [All checks](docs/CHECKS.md)
@@ -139,6 +141,6 @@ The first version: the engine, proof and browser checks.
 - The [charter](docs/PROJECT.md), the [design system](DESIGN.md), the [security model](SECURITY.md), and guides for [getting started](docs/GETTING-STARTED.md), [usage](docs/USAGE.md), [how it works](docs/HOW-IT-WORKS.md), [the checks](docs/CHECKS.md), [the MCP server](docs/MCP.md), the [architecture](docs/ARCHITECTURE.md) and [troubleshooting](docs/TROUBLESHOOTING.md).
 - A clickable demo of the planned dashboard (sample data) and two real sample reports in `demo/`.
 
-### Tested
+#### Tested
 
 61 tests, including a real MCP client over stdio, real `npm test` runs for the proof, and real pages in a real browser (skipped where none is installed). Also run read-only on five real repositories, which found the false positives now pinned by `calibration.test.ts`, and on a throwaway copy of Assay itself (a TypeScript monorepo with workspaces).
