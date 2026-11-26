@@ -111,7 +111,7 @@ Who is worth their tokens for this case, and what each is handed. The [reviewers
 |---|---|
 | `assay reviewers [range]` | The plan: which reviewers would run, why, and what each costs. Nothing is kept or spent. `--budget 40k\|free\|<tokens>`, `--request "what was asked"` |
 | `assay reviewers plan [range]` | The same, kept with the case so an agent can run it |
-| `assay reviewers brief <lens> [range]` | What one reviewer is handed, to paste into any agent. `--round 2` for cross-examination, `--page <n>` for a long change. Lenses: triage, security, correctness, ui, tests, supply-chain, performance |
+| `assay reviewers brief <lens> [range]` | What one reviewer is handed, to paste into any agent. `--round 2` for cross-examination, `--page <n>` for a long change. Lenses: triage, security, correctness, ui, tests, supply-chain, performance; and `attack`, the attack pass, when the plan lists it (budgets of 80k and more) |
 | `assay reviewers status [range]` | Who has reported and what is next |
 | `assay reviewers budget [40k\|free]` | Show, or set, the budget for this project from now on |
 | `--include <lens,…>` | Bring back a reviewer that [calibration](CALIBRATION.md) left out of the plan |
@@ -128,6 +128,7 @@ Plant known bugs in a throwaway repository and score the free checks and each re
 | `assay calibrate start` | Makes the throwaway repository, scores the free checks at once, and prints what to give your agent. `--budget <tokens>` (200k) |
 | `assay calibrate score [run]` | The scoreboard of a run; it moves as your agent's reviewers report. `--json` |
 | `assay calibrate clean [--all]` | Removes old throwaway repositories (what each showed is kept) |
+| `assay calibrate history [start\|score\|clean]` | Real bugs from your own history: the lines your fix commits removed and the commit each came in at. Plain: what would be replayed. `start` opens those commits as cases and scores the free checks; `score` shows the scoreboard; `clean` forgets it. `--limit <n>` (12), `--budget <tokens>` (100k a commit) |
 
 ## Memory
 

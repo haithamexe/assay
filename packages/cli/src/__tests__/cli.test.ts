@@ -257,6 +257,8 @@ test('reviewers: the plan and its cost first (nothing kept), then a kept plan, a
   assert.ok(!brief.out.includes('QWERTYUIOP123456'), 'a secret is never in a brief, even one you paste yourself');
   assert.match(run('reviewers', 'brief', 'astrology').err, /no reviewer called/);
   assert.match(run('reviewers', 'brief').err, /Which reviewer/);
+  assert.match(run('reviewers', '--budget', '100k').out, /Attack/, 'at 100k the attack pass is on offer: it runs, or says why not');
+  assert.match(run('reviewers', 'brief', 'attack').err, /not part of this panel: The attack pass is for budgets of 80k or more/, 'the kept 40k plan has none');
   const asJson = JSON.parse(run('reviewers', 'status', '--json').out) as { panel: { reviewers: Array<{ lens: string; state: string }> }; status: { phase: string } };
   assert.equal(asJson.status.phase, 'waiting', 'nobody has said they are done');
   assert.equal(asJson.panel.reviewers.find(r => r.lens === 'Security')!.state, 'briefed', 'but the security reviewer has its brief');
@@ -326,4 +328,45 @@ test('calibrate: what would be planted, a run scored on the spot, the prompt for
   assert.match(run('calibrate', 'clean', '--all').out, /Removed \d+ throwaway/);
   assert.match(run('calibrate', 'score').err, /no calibration run yet/);
   assert.match(run('reviewers', '--include', 'ui,security').out, /Reviewer panel/);
+});
+
+/* ---- history: real bugs from the project's own fixes ---- */
+const hist = fs.mkdtempSync(path.join(os.tmpdir(), 'assay-cli-hist-'));
+const hg = (...a: string[]): string => execFileSync('git', ['-C', hist, ...a], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
+hg('init', '-q', '-b', 'main');
+hg('config', 'commit.gpgsign', 'false');
+fs.mkdirSync(path.join(hist, 'src'));
+const histFile = path.join(hist, 'src', 'cart.js');
+fs.writeFileSync(histFile, 'export function total(items) {\n  return items.reduce((s, i) => s + i.price, 0);\n}\n');
+hg('add', '-A'); hg('commit', '-q', '-m', 'Base');
+fs.writeFileSync(histFile, 'export function total(items) {\n  return items.reduce((s, i) => s + i.price, 0);\n}\n\nexport function render(el, text) {\n  el.innerHTML = text;\n  return el;\n}\n');
+hg('add', '-A'); hg('commit', '-q', '-m', 'Show errors in the cart');
+fs.writeFileSync(histFile, 'export function total(items) {\n  return items.reduce((s, i) => s + i.price, 0);\n}\n\nexport function render(el, text) {\n  el.textContent = text;\n  return el;\n}\n');
+hg('add', '-A'); hg('commit', '-q', '-m', 'fix: show errors as text');
+const runHist = (...args: string[]): { code: number | null; out: string; err: string } => {
+  const r = spawnSync(process.execPath, [bin, ...args, '--repo', hist], { env, encoding: 'utf8' });
+  return { code: r.status, out: r.stdout, err: r.stderr };
+};
+
+test('calibrate history: what would be replayed, a replay scored on the spot, the prompt for the agent, and forgetting it', () => {
+  const p = runHist('calibrate', 'history');
+  assert.equal(p.code, 0, p.err);
+  assert.match(p.out, /would replay 1 past bug/);
+  assert.match(p.out, /fixed by “fix: show errors as text”/);
+  assert.match(runHist('calibrate', 'history', 'score').err, /no replay yet/, 'nothing was kept by looking');
+  const s = runHist('calibrate', 'history', 'start');
+  assert.equal(s.code, 0, s.err);
+  assert.match(s.out, /Your own history .*1 past bug from 1 commit/);
+  assert.match(s.out, /Free checks alone, when each came in/);
+  assert.match(s.out, /came in with “Show errors in the cart”, fixed by “fix: show errors as text”/);
+  assert.match(s.out, /Now the reviewers/);
+  assert.match(s.out, /don't look at any commit after a case's head/);
+  const asJson = JSON.parse(runHist('calibrate', 'history', 'score', '--json').out) as { total: number; rows: Array<{ id: string }> };
+  assert.equal(asJson.total, 1);
+  assert.equal(asJson.rows[0].id, 'free');
+  assert.match(runHist('calibrate', 'history').out, /Free checks alone/, 'with a replay kept, the bare command shows its scoreboard');
+  assert.match(runHist('calibrate', 'history', 'clean').out, /Forgot the last replay/);
+  assert.match(runHist('calibrate', 'history', 'score').err, /no replay yet/);
+  assert.match(runHist('calibrate', 'history', 'sideways').err, /Unknown history command/);
+  assert.equal(execFileSync('git', ['-C', hist, 'status', '--porcelain'], { encoding: 'utf8' }).trim(), '', 'the repository was only read');
 });

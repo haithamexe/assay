@@ -140,12 +140,31 @@ export function sliceFor(lens: Lens, facts: Facts, flagged: Set<string>): Slice 
     return { pages: [text || '(nothing changed)'], shown: facts.files.length, omitted: [], chars: text.length };
   }
   const ranked = facts.files.map(f => ({ f, w: wanted(lens, f, flagged) })).filter(x => x.w > 0).sort((a, b) => b.w - a.w || a.f.path.localeCompare(b.f.path));
+  return paginate(ranked.map(x => x.f));
+}
+
+/**
+ * What the attack pass (D50) is shown: every changed file that runs or is a page (never a test or a lockfile: the attacker must find what the
+ * tests miss, and is told which tests changed by name), the biggest and the flagged ones first, in the same pages and with the same line numbers.
+ */
+export function attackSlice(facts: Facts, flagged: Set<string>): Slice {
+  const rank = (f: ChangedFile): number => (f.test || isLockfile(f.path) ? 0 : (f.source || f.ui || f.sensitive ? (flagged.has(f.path) ? 50 : 0) + Math.min(f.diff.additions, 40) + (f.sensitive ? 30 : 0) + 1 : 0));
+  const ranked = facts.files.map(f => ({ f, w: rank(f) })).filter(x => x.w > 0).sort((a, b) => b.w - a.w || a.f.path.localeCompare(b.f.path));
+  return paginate(ranked.map(x => x.f));
+}
+
+/** What the plain review (D51) is shown: the whole change, biggest files first, tests included, in the same pages and with the same line numbers. */
+export function plainSlice(facts: Facts): Slice {
+  return paginate([...facts.files].sort((a, b) => b.diff.additions + b.diff.deletions - (a.diff.additions + a.diff.deletions) || a.path.localeCompare(b.path)));
+}
+
+function paginate(ranked: ChangedFile[]): Slice {
   const pages: string[] = [];
   let cur = '';
   let total = 0;
   let shown = 0;
   const omitted: string[] = [];
-  for (const { f } of ranked) {
+  for (const f of ranked) {
     const lockfile = isLockfile(f.path);
     const text = lockfile ? `── ${f.path}   commit ${f.commit.slice(0, 7)}  +${f.diff.additions} −${f.diff.deletions}  (lockfile: not shown)` : renderFile(f);
     if (total + text.length > MAX_TOTAL) { omitted.push(`${f.path} (${f.commit.slice(0, 7)})`); continue; }

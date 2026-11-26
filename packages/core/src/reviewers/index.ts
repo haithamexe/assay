@@ -1,6 +1,6 @@
-export { REVIEWERS, reviewerFor, lensPrompt, lensesDir, bundledLensesDir } from './lenses.js';
+export { REVIEWERS, ATTACKER, PLAIN, isAttack, isPlain, reviewerFor, lensPrompt, lensesDir, bundledLensesDir } from './lenses.js';
 export type { ReviewerDef } from './lenses.js';
-export { previewPanel, planPanel, markBriefed, recordSubmission, openCross, statusOf, knownFor, crossCost, k as tokensText, ANSWER_ALLOWANCE } from './plan.js';
+export { previewPanel, planPanel, markBriefed, recordSubmission, openCross, statusOf, knownFor, knownAll, ATTACK_MIN_BUDGET, crossCost, k as tokensText, ANSWER_ALLOWANCE } from './plan.js';
 export type { PanelStatus } from './plan.js';
 export { reviewerBrief } from './brief.js';
 export type { BriefResult } from './brief.js';

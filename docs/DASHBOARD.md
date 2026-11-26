@@ -83,7 +83,7 @@ The plan for the case you have open (the whole branch if none is): a **budget** 
 
 **Assay never calls a model, so this screen can't run the reviewers.** Your agent does, from the prompt on the screen. While a panel is running the screen follows what the agent reports (it asks every few seconds): who is working, who has reported, what the evidence gate kept and dropped and why, and any disputes from cross-examination. The case file's verdict card says where the panel stands, and a disputed claim says so under the finding. The budget is only a number, so the page may set it; it can't start, spend or run anything.
 
-The **Scoreboard** tab (on the Reviewers screen) is [calibration](CALIBRATION.md): before a run it says what would be planted in this project; **Plant bugs and test the reviewers** makes the throwaway repository (a job) and scores the free checks at once; then it shows the words to give your agent, and fills in as the reviewers report: a table (caught with proof, flagged only, missed, false alarms, tokens per catch, what it suggests) and a matrix of every planted bug against every reviewer. A reviewer calibration left out of plans is listed, with the way to bring it back. The page can plant and clear throwaway repositories, which reads git and writes only under Assay's own folder; it can't run a model or your code.
+The **Scoreboard** tab (on the Reviewers screen) is [calibration](CALIBRATION.md): before a run it says what would be planted in this project; **Plant bugs and test the reviewers** makes the throwaway repository (a job) and scores the free checks at once; then it shows the words to give your agent, and fills in as the reviewers report: a table (caught with proof, flagged only, missed, false alarms, tokens per catch, what it suggests) and a matrix of every planted bug against every reviewer. A reviewer calibration left out of plans is listed, with the way to bring it back. The page can plant and clear throwaway repositories, which reads git and writes only under Assay's own folder; it can't run a model or your code. Below it, **From your own history** shows the last [replay of your own fix commits](CALIBRATION.md#replaying-your-own-history): the free checks scored on the commit each past bug came in at, and each reviewer, the attack pass and the plain review as they report. The page only shows it: starting one is a command, because it opens cases.
 
 ### Memory
 
@@ -127,7 +127,6 @@ A page on the internet must not be able to talk to this server, and a mistake in
 - *Stop* can't interrupt a page that is already being measured, only the next one.
 - The pictures are as taken at 1280 × 800 (desktop) and 390 × 844 (phone), as loaded and mirrored on desktop, in the light scheme.
 - It needs a current browser (it uses ES modules and `<dialog>`).
-- The attack pass is not built yet.
 - The screen shows one panel per case: a new budget with a kept panel says so and asks you to plan again (that starts the panel over).
 - Memory can add suggestions from history here, but a pattern of your own (`assay memory add --pattern`), a pack file (`assay memory import`) and renaming a suggestion are command line only.
 

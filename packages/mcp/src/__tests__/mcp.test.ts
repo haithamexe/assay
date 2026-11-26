@@ -162,6 +162,26 @@ test('the reviewer panel: plan and cost first, a blind brief per reviewer, a don
   assert.ok(!/reviewers?_run|reviewers?_start|spend/i.test((await client.listTools()).tools.map(t => t.name).join(' ')), 'there is no tool that spends tokens: the agent does the reviewing');
 });
 
+test('the attack pass: on offer only on a big budget, briefed as "attack", reported as "Attack", and counted with the panel', async () => {
+  const none = await call('reviewer_brief', { case: caseId, lens: 'attack' });
+  assert.equal(none.isError, true, 'the kept 60k plan has no attack pass');
+  assert.match(none.text, /not part of this panel: The attack pass is for budgets of 80k or more/);
+  const plan = await call('reviewers_plan', { case: caseId, budget: 100000, request: 'Add settings and a view' });
+  assert.match(plan.text, /RUN\s+Attack\s+~[\d.]+k\s+Tries to break/);
+  assert.match(plan.text, /lens "attack"/, 'it says how to start it');
+  const brief = await call('reviewer_brief', { case: caseId, lens: 'attack' });
+  assert.equal(brief.isError, false, brief.text);
+  assert.match(brief.text, /REVIEWER BRIEF · Attack/);
+  assert.match(brief.text, /── src\/view\.tsx/);
+  assert.ok(!brief.text.includes('QWERTYUIOP123456'), 'a secret is never in a brief');
+  assert.equal((await call('reviewer_brief', { case: caseId, lens: 'attack', round: 2 })).isError, true, 'one round');
+  const done = await call('finding_submit', { case: caseId, reviewer: 'Attack', done: true, tokens: 3100 });
+  assert.equal(done.isError, false);
+  assert.match(done.text, /Marked done/);
+  const after = await call('reviewers_plan', { case: caseId, budget: 100000, request: 'Add settings and a view' });
+  assert.match(after.text, /Attack\s+~[\d.]+k\s+.*reported: 0 claims/);
+});
+
 test('finding_get shows the lines and the evidence, and the evidence replays', async () => {
   const g = await call('finding_get', { case: caseId, id: secretId });
   assert.match(g.text, /AKIA…\(20 characters\)/);

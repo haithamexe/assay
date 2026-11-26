@@ -18,7 +18,7 @@ export const REVIEWERS_HELP = `${bold('assay reviewers')}  who is worth their to
   --budget 40k|free|<tokens>   what the reviewers may cost in all (default: the project's setting, 40k)
   --request "what was asked"   lets the Triage reviewer trace each change back to it
   --include <lens,…>           bring back a reviewer that calibration left out of the plan
-  lenses   triage, security, correctness, ui, tests, supply-chain, performance
+  lenses   triage, security, correctness, ui, tests, supply-chain, performance, and attack (the attack pass: budgets of 80k and more)
 
   assay hook stop              a Stop hook: blocks "done" while Assay's own verdict is Blocked   (--always, --require-panel, --max-blocks <n>)
   assay hook install           the lines to add to your agent's settings, and what they do

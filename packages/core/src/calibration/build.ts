@@ -129,8 +129,9 @@ export function startCalibration(repoIn: string, opts: { budget?: number } = {})
   const budget = Math.max(0, Math.min(400_000, Math.round(opts.budget ?? CALIBRATION_BUDGET)));
   const a = openCase({ repo: dir, span: { base, head: plantedHead } });
   const b = openCase({ repo: dir, span: { base, head: controlHead } });
-  planPanel(a, { budget });
-  planPanel(b, { budget });
+  // The plain review rides along on both cases: one reviewer with no lens and no free findings, the stick the panel is measured against (D51).
+  planPanel(a, { budget, baseline: true });
+  planPanel(b, { budget, baseline: true });
   const run: CalibrationRun = {
     id, repo, createdAt: new Date().toISOString(), dir, base, planted: { case: a.id, head: plantedHead, bugs }, control: { case: b.id, head: controlHead },
     skipped, shape: Object.fromEntries(Object.entries(shape.dirs).map(([k, v]) => [k, v || '.'])), budget
@@ -141,4 +142,4 @@ export function startCalibration(repoIn: string, opts: { budget?: number } = {})
 
 /** What to give an agent to run the reviewers on both cases. It says not to read Assay's calibration folder: the test means something only if the reviewers don't know which case holds the bugs. */
 export const handoffPrompt = (planted: string, control: string): string =>
-  `Review two cases with Assay's reviewer panel, one after the other, and tell me when both panels are done. Case ${planted}, then case ${control}. For each, call the assay tool reviewers_plan with that case id and follow what it says: start one sub-agent per reviewer it lists, in parallel, each told only to call reviewer_brief for its own lens and follow it. Don't show the reviewers each other's work, and don't read anything under ~/.assay/calibration: it is a test, and it only means something if the reviewers don't know which one holds the bugs.`;
+  `Review two cases with Assay's reviewer panel, one after the other, and tell me when both panels are done. Case ${planted}, then case ${control}. For each, call the assay tool reviewers_plan with that case id and follow what it says: start one sub-agent per reviewer it lists, in parallel, each told only to call reviewer_brief for its own lens and follow it (it also lists a plain review, lens "plain", and may list an attack pass, lens "attack": run them like the others). Don't show the reviewers each other's work, and don't read anything under ~/.assay/calibration: it is a test, and it only means something if the reviewers don't know which one holds the bugs.`;

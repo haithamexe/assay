@@ -57,6 +57,15 @@ t('reviewers in the page: the cost first, a budget, a kept plan, and the screen 
     await setValue('#rvbudget', '40000', 'change');
     await until('40k again', async () => /This is a preview/.test(await text('.callout')));
 
+    // the attack pass is for big budgets: at 80k the step and the meter say so, and no card is added (it has no lens)
+    assert.ok(!/attack/i.test(await text('#main')), 'not on offer at 40k, so not mentioned');
+    await setValue('#rvbudget', '80000', 'change');
+    await until('80k', async () => /Cross-exam \+ attack/.test(await text('#main')));
+    assert.match(await text('.meterlegend'), /Attack \d/);
+    assert.equal(await count('.rcard'), 7);
+    await setValue('#rvbudget', '40000', 'change');
+    await until('40k once more', async () => !/Cross-exam \+ attack/.test(await text('#main')));
+
     // plan them: kept with the case, and the prompt to give an agent is there
     await setValue('#rvreq', 'Add the cart with an export', 'input');
     await click('[data-act="rv-plan"]');

@@ -1,9 +1,9 @@
 import { isOpen } from '../case.js';
 import { redactSecrets } from '../checks/secrets.js';
 import type { Case, Finding } from '../types.js';
-import { lensPrompt, reviewerFor, type ReviewerDef } from './lenses.js';
-import { knownFor, markBriefed, openCross, questionsFor } from './plan.js';
-import { changedFiles, factsOf, sliceFor } from './slice.js';
+import { ATTACKER, isAttack, isPlain, lensPrompt, PLAIN, reviewerFor, type ReviewerDef } from './lenses.js';
+import { knownAll, knownFor, markBriefed, openCross, questionsFor } from './plan.js';
+import { attackSlice, changedFiles, factsOf, plainSlice, sliceFor } from './slice.js';
 
 /**
  * What one reviewer is handed (D38). It is everything the reviewer needs and nothing it shouldn't have: its own lens, its own slice of the
@@ -67,10 +67,85 @@ function round2(c: Case, lens: ReviewerDef): BriefResult {
   return { text: parts.join('\n'), pages: 1, page: 1, round: 2 };
 }
 
+const ATTACK_RULES = `You are the attacker. Other reviewers look at this change through one lens each, and none of them can see your work or you theirs. You have no lens: you try to break the change.
+- Every claim must cite a file and a line that appears in the change below: the number printed next to a + or an unchanged line, or next to a − line for something removed. A claim that doesn't is dropped by an evidence gate.
+- A claim is one break: the concrete input or sequence, what the changed code does with it, and what should have happened. Say what you observed (what those lines do) separately from what you infer. What you infer never blocks a merge. Only proof does, and only Assay produces proof, so you can't claim it: a "this fails" is kept as your reading.
+- No style opinions. Silence is a good answer: if you can't break it, report no claims.
+- At most 12 claims, the ones you would bet on first.`;
+
+/** The attack pass's brief (D50): every changed file that runs, the tests that changed by name, and what the free checks found. Never another reviewer's claims. */
+function attackRound(c: Case, page: number): BriefResult {
+  const facts = factsOf(changedFiles(c));
+  const known = knownAll(c);
+  const slice = attackSlice(facts, new Set(known.map(f => f.file)));
+  const p = Math.min(Math.max(1, page), slice.pages.length);
+  const tests = [...new Set(facts.files.filter(f => f.test).map(f => f.path))];
+  const parts = [
+    `REVIEWER BRIEF · Attack · case ${c.id}`,
+    '',
+    `You are the attacker for ${c.name} (${c.commits.length} commit${c.commits.length === 1 ? '' : 's'}, ${c.base ? c.base.slice(0, 7) : 'the start'}..${c.head.slice(0, 7)}).`,
+    ATTACK_RULES,
+    '',
+    'YOUR JOB',
+    lensPrompt(ATTACKER),
+    '',
+    `THE CHANGE (page ${p} of ${slice.pages.length}; ${slice.shown} file${slice.shown === 1 ? '' : 's'} that run or are shown)`,
+    slice.pages[p - 1]
+  ];
+  if (p === slice.pages.length && slice.omitted.length) parts.push('', `Not shown, to keep this short: ${slice.omitted.slice(0, 12).join(', ')}${slice.omitted.length > 12 ? '…' : ''}.`);
+  if (p < slice.pages.length) parts.push('', `More of the change: call reviewer_brief again with page ${p + 1}. Report once you have read all ${slice.pages.length} pages.`);
+  if (p === 1) {
+    parts.push('', tests.length ? `TESTS THAT CHANGED (names only; what they cover is for you to work out): ${tests.slice(0, 12).join(', ')}${tests.length > 12 ? '…' : ''}` : 'NO TEST FILE CHANGED in this change.');
+    if (known.length) parts.push('', 'ALREADY FOUND BY THE FREE CHECKS (do not repeat; add to one only if you can say what it missed)', ...known.slice(0, 12).map(f => `- ${f.title} · ${f.file}:${f.lines}`));
+  }
+  parts.push('', 'HOW TO ANSWER', `Call finding_submit with case "${c.id}", reviewer "Attack", your claims (title, lens: the area the break is in, one of Correctness, Security, UI, Performance, Tests or Supply chain; file; line; what: "Input: … The code: … Should: …"; and severity if you can say) and done: true. With nothing to report, call it with no claims and done: true. You may say how many tokens you used with tokens.`);
+  return { text: parts.join('\n'), pages: slice.pages.length, page: p, round: 1 };
+}
+
+/** The plain review's brief (D51): the whole change and a generic prompt. No lens, no free findings, no questions: it is what a single plain review would have seen. */
+function plainRound(c: Case, page: number): BriefResult {
+  const slice = plainSlice(factsOf(changedFiles(c)));
+  const p = Math.min(Math.max(1, page), slice.pages.length);
+  const parts = [
+    `REVIEWER BRIEF · Plain review · case ${c.id}`,
+    '',
+    `You are the only reviewer of this change to ${c.name} (${c.commits.length} commit${c.commits.length === 1 ? '' : 's'}, ${c.base ? c.base.slice(0, 7) : 'the start'}..${c.head.slice(0, 7)}).`,
+    `- Every claim must cite a file and a line that appears in the change below: the number printed next to a + or an unchanged line, or next to a − line for something removed. A claim that doesn't is dropped.
+- Keep each claim to a sentence or two, at most 20 claims. If you find nothing worth saying, report no claims.`,
+    '',
+    'YOUR JOB',
+    lensPrompt(PLAIN),
+    '',
+    `THE CHANGE (page ${p} of ${slice.pages.length}; ${slice.shown} file${slice.shown === 1 ? '' : 's'})`,
+    slice.pages[p - 1]
+  ];
+  if (p === slice.pages.length && slice.omitted.length) parts.push('', `Not shown, to keep this short: ${slice.omitted.slice(0, 12).join(', ')}${slice.omitted.length > 12 ? '…' : ''}.`);
+  if (p < slice.pages.length) parts.push('', `More of the change: call reviewer_brief again with page ${p + 1}. Report once you have read all ${slice.pages.length} pages.`);
+  parts.push('', 'HOW TO ANSWER', `Call finding_submit with case "${c.id}", reviewer "Plain", your claims (title, lens: one of Correctness, Security, UI, Performance, Tests or Supply chain; file; line; what; and severity if you can say) and done: true. With nothing to report, call it with no claims and done: true. You may say how many tokens you used with tokens.`);
+  return { text: parts.join('\n'), pages: slice.pages.length, page: p, round: 1 };
+}
+
 /** The brief for one reviewer. Round 2 is refused until every reviewer has reported. Fetching page 1 marks the reviewer as briefed. */
 export function reviewerBrief(c: Case, name: string, o: { round?: 1 | 2; page?: number } = {}): BriefResult {
+  if (isPlain(name)) {
+    if (o.round === 2) throw new Error('The plain review has one round.');
+    if (!c.panel) throw new Error('No panel is planned for this case. Call reviewers_plan first.');
+    if (!c.panel.baseline?.run) throw new Error('The plain review is only part of a calibration run (assay calibrate), where it is the baseline the panel is measured against. It is not part of this panel.');
+    const out = plainRound(c, o.page ?? 1);
+    if (out.page === 1) markBriefed(c, 'plain', 1);
+    return out;
+  }
+  if (isAttack(name)) {
+    if (o.round === 2) throw new Error('The attack pass has one round. What it claims is cross-examined with the other reviewers’ claims.');
+    if (!c.panel) throw new Error('No panel is planned for this case. Call reviewers_plan first: it also shows what the panel will cost.');
+    const a = c.panel.attack;
+    if (!a?.run) throw new Error(`The attack pass is not part of this panel: ${a?.why ?? 'it was not planned (it is for bigger budgets)'}`);
+    const out = attackRound(c, o.page ?? 1);
+    if (out.page === 1) markBriefed(c, 'attack', 1);
+    return out;
+  }
   const lens = reviewerFor(name);
-  if (!lens) throw new Error(`There is no reviewer called "${name}". They are: Triage (Scope), Security, Correctness, UI, Tests, Supply chain, Performance.`);
+  if (!lens) throw new Error(`There is no reviewer called "${name}". They are: Triage (Scope), Security, Correctness, UI, Tests, Supply chain, Performance, and Attack (the attack pass, when the plan includes it); in a calibration run also Plain (the baseline).`);
   const round = o.round === 2 ? 2 : 1;
   if (!c.panel) throw new Error('No panel is planned for this case. Call reviewers_plan first: it also shows what the panel will cost.');
   const mine = c.panel.reviewers.find(r => r.lens === lens.lens);

@@ -170,7 +170,7 @@ export function createServer(version = '0.1.0'): McpServer {
     description: 'Submit what you found as a reviewer. Every claim must cite a file and a line inside the diff or it is dropped. A claim next to an existing finding adds a second source to it; a claim elsewhere becomes a hint. You can’t claim proof: evidence kinds like test-fail are recorded as your reading until Assay runs them.',
     inputSchema: {
       case: z.string(),
-      reviewer: z.string().min(2).max(40).describe('Your lens, e.g. "Security"'),
+      reviewer: z.string().min(2).max(40).describe('Your lens, e.g. "Security"; or "Attack" if you are the attack pass'),
       claims: z.array(z.object({
         title: z.string().min(3).max(140),
         lens: z.enum(LENSES),
@@ -226,10 +226,10 @@ export function createServer(version = '0.1.0'): McpServer {
 
   server.registerTool('reviewer_brief', {
     title: 'The brief for one reviewer',
-    description: 'Everything one reviewer needs and nothing it shouldn’t have: its lens, its slice of the change with the line numbers a claim must cite, what the free checks already found for it, and how to report. Call it as the reviewer, once per reviewer; it is never shown another reviewer’s work. Round 2 (cross-examination) hands over other reviewers’ claims anonymously, and only after every reviewer has reported.',
+    description: 'Everything one reviewer needs and nothing it shouldn’t have: its lens, its slice of the change with the line numbers a claim must cite, what the free checks already found for it, and how to report. Call it as the reviewer, once per reviewer; it is never shown another reviewer’s work. Round 2 (cross-examination) hands over other reviewers’ claims anonymously, and only after every reviewer has reported. The attack pass (lens "attack", only when the plan lists it) has no lens: it tries to break the change, sees every changed file that runs, and is as blind as the rest.',
     inputSchema: {
       case: z.string(),
-      lens: z.string().min(2).max(40).describe('Your lens: Triage, Security, Correctness, UI, Tests, Supply chain or Performance'),
+      lens: z.string().min(2).max(40).describe('Your lens: Triage, Security, Correctness, UI, Tests, Supply chain or Performance; or "attack" if the plan lists the attack pass'),
       round: z.union([z.literal(1), z.literal(2)]).optional(),
       page: z.number().int().min(1).max(50).optional().describe('A long change comes in pages')
     },

@@ -219,7 +219,7 @@ job:    own(case) ─▶ proveCase(case, {signal, onProgress}) ─▶ {report, c
 
 ## Tests
 
-165 tests across the four packages, run with `npm test` (it builds first):
+185 tests across the four packages, run with `npm test` (it builds first):
 
 - the diff parser, the tier function, risk, masking, and the checks, on fixture repositories built with the real `git` in the OS temp folder
 - `calibration.test.ts`: one test per false positive found by running Assay on real repositories

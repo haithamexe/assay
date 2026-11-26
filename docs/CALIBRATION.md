@@ -38,6 +38,15 @@ assay calibrate clean --all   # remove the throwaway repositories (what each sho
 
 Some of these the free checks can catch (a committed key is proven; an HTML sink is flagged); others only a reviewer can (a loop that runs one step too far has no pattern), or only a browser (a fixed width). **That is the point of the table:** it shows what the reviewers add that the free checks can't, and what they cost for it. The templates are in `packages/core/src/calibration/bugs.ts`.
 
+## The baseline: one plain review
+
+A panel of reviewers costs several times what one review costs, so the scoreboard also measures **one plain review** against it. In a calibration run only (never in a real review), a plain review is planned on both cases: one reviewer with **no lens, no free findings and no questions**, handed the whole change (tests included) and told to review it as one capable engineer would. That is what you would have had without Assay's lenses.
+
+- Your agent runs it like the others: `reviewer_brief` with lens `plain`, then `finding_submit` with reviewer `Plain` and `done: true`. The prompt from `assay calibrate start` says so.
+- It gets a row, **One plain review (no lenses)**, and a column in the matrix. Every planted bug is a chance for it, because it has no lens of its own to miss in. Its false alarms are what it flags on the clean twin, and its tokens per catch count the whole diff.
+- The row's advice says what the lenses add: *"One plain review flagged 3 of 18; the panel flagged 11. The lenses are adding something."*, or *"No gain from the lenses on this set."* if they don't. The headline is the point: you find out whether the panel earns its extra tokens on your project, or whether one plain review would have done.
+- It is blind like the rest, and what only it claimed is **not** cross-examined (it is a measuring stick, not part of the panel). It never counts toward leaving a reviewer out of plans.
+
 ## Reading the scoreboard
 
 | Column | Meaning |
@@ -53,6 +62,31 @@ The matrix below it shows each bug against each reviewer: **✓** caught with pr
 
 The headline is the useful number: *"1 of 18 planted bugs were caught by the free checks alone, with proof, at 0 tokens. With the reviewers: 14 of 18 flagged by someone."*
 
+## Replaying your own history
+
+The planted bugs are invented. Your own fix commits are real. `assay calibrate history` uses them as a second benchmark:
+
+```bash
+assay calibrate history           # which past bugs would be replayed (nothing is kept)
+assay calibrate history start     # open those commits as cases, score the free checks at once, print what to give your agent
+assay calibrate history score     # the scoreboard again (it moves as the reviewers report)
+assay calibrate history clean     # forget the last replay
+```
+
+1. **Find the fixes.** The last 400 commits are read for fixes: a subject that starts with `fix:`, `bugfix:` or `hotfix:`, or says it fixes something (never a `refactor:`, `docs:`, a revert or a merge), one parent, not a bulk change.
+2. **Find where each bug came in.** A fix removes lines. `git blame` on the fix's parent says which commit last wrote each removed line, and where that line sits in that commit's version of the file. That line, in that commit, is the truth. It must be a line that commit added, and the commit must be an ordinary one (one parent, not a bulk change). At most two bugs per fix, up to 12 in all (`--limit`, at most 40).
+3. **Each of those commits is a case of its own**, with the same panel as any case (the lenses, the attack pass on a big enough budget, and one plain review), at 100k tokens a commit by default (`--budget`). The free checks are scored on it at once: caught with proof, flagged without proof, or missed.
+4. **Your agent runs the reviewers**, with the words `assay calibrate history start` prints. It is told not to look at any commit after a case's head, because the fix is there (an honor system, like the planted run).
+5. **The scoreboard** shows each of the free checks, each lens that ran, the attack pass and the plain review against every past bug, on the Scoreboard tab as well as in the terminal (the page shows it, and can't start one).
+
+What it is, and isn't:
+
+- **A proxy, and it says so.** A line a fix removed is not always the defect: a fix can rewrite code around it. Only commits that say they are fixes are used, so it is a sample of your own history, not a verdict.
+- **No false alarms are counted.** Nobody knows that the rest of a commit is clean, so a flag that landed on none of the past bugs is listed as "elsewhere", for information.
+- **Real cases.** These are ordinary cases of your project (a commit against its parent), unlike the throwaway ones. They are read from git and nothing in the project runs.
+- **Small samples.** A project with few fixes gives few bugs. A reviewer's lens isn't known for a real bug, so reviewers are scored on whether they flagged it at all.
+- **It doesn't change routing.** Leaving a reviewer out of plans still comes only from the planted runs.
+
 ## Routing a reviewer out
 
 A reviewer is **left out of plans** when, in each of its **last two finished runs**, bugs were planted in its lens and it caught **none** of them. One run is a hint, shown in "what it suggests"; two in a row is a record. A run is finished when every planned reviewer has reported on both cases, and counts once.
@@ -62,8 +96,7 @@ A reviewer that is left out says so in the plan (`Left out: it caught none of th
 ## What it can't tell you
 
 - **A model varies from run to run.** A reviewer that catches 3 of 5 today may catch 4 tomorrow. That is why one run only advises and two in a row decide, and why you can run it again.
-- **The bugs are Assay's, not your project's.** They are realistic and shaped like your languages, but a reviewer's record on them is a proxy for its record on your real code. Replaying your own fix commits as a benchmark (finding the commit that introduced each fixed bug) is a better measure, and is not built.
-- **No plain-review baseline.** The demo's last row, one undifferentiated AI review with no evidence gate, isn't built: it would need a second run with a different agent prompt.
+- **The bugs are Assay's, not your project's.** They are realistic and shaped like your languages, but a reviewer's record on them is a proxy for its record on your real code. Replaying your own fix commits (above) is a better measure, and a small one.
 - **Planted bugs are fixed in number.** A reviewer that is good at a kind of bug that isn't planted (a race, a rounding error) gets no credit for it.
 
 ## Safety

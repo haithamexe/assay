@@ -28,7 +28,21 @@ export const REVIEWERS: ReviewerDef[] = [
   { lens: 'Performance', name: 'Performance', file: 'performance', base: 1 }
 ];
 
-export const bundledLensesDir = (): string => path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'lenses');
+/**
+ * The attack pass (D50) is not a lens: its findings belong to whichever lens the break is in. It has a prompt file like a lens does
+ * (yours in ~/.assay/lenses/attack.md replaces the one that ships), and it is reached by the name "attack".
+ */
+export const ATTACKER: ReviewerDef = { lens: 'Correctness', name: 'Attack', file: 'attack', base: 0 };
+export const isAttack = (name: string): boolean => /^attack(er| pass)?$/i.test(name.trim().replace(/[-_]+/g, ' '));
+
+/**
+ * The plain review (D51) is the stick the panel is measured against: one reviewer with no lens, no free findings and no questions, handed the whole
+ * change and told to review it, as one capable engineer (or one plain AI review) would. It is only planned in calibration runs, never in a real review.
+ */
+export const PLAIN: ReviewerDef = { lens: 'Correctness', name: 'Plain review', file: 'plain', base: 0 };
+export const isPlain = (name: string): boolean => /^plain( review)?$/i.test(name.trim().replace(/[-_]+/g, ' '));
+
+export const bundledLensesDir =(): string => path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'lenses');
 export const lensesDir = (): string => assayPath('lenses');
 
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z]/g, '');
@@ -49,5 +63,7 @@ export function lensPrompt(def: ReviewerDef): string {
       if (t) return t.length > MAX_PROMPT ? `${t.slice(0, MAX_PROMPT)}\n…` : t;
     } catch { /* try the next one */ }
   }
+  if (def === PLAIN) return 'Review this change as one capable engineer would. Report what you think is wrong, and tie each claim to a changed line.';
+  if (def === ATTACKER) return'Try to break this change: say the concrete input or sequence, what the changed code does with it (cite the line) and what should have happened. Report only what you can tie to a changed line.';
   return `You look only at ${def.lens.toLowerCase()}. Report what you can tie to a changed line.`;
 }

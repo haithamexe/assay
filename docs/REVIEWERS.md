@@ -88,6 +88,18 @@ Reviewers who work alone make mistakes nobody catches, and agree by accident. Wh
 - **disputes** it, with a reason. The dispute is shown on the screen and under the finding. It changes no tier: what one reviewer says alone stays a hint;
 - or says nothing.
 
+## The attack pass
+
+One more reviewer, outside the lenses, whose only job is to **break the change**. It is told to find the input, the order of events or the state that makes the changed code do the wrong thing, and to say, for each break, the concrete input or sequence, what the code does with it (citing the line) and what should have happened. A break it can't tie to a changed line is not a finding.
+
+- **On offer only on a big budget** (80k tokens or more), because it reads every changed file that runs or is shown (not tests, not lockfiles) and costs the most. It is planned only when a reviewer is worth running and something that runs or is shown changed, and only if it fits after the others and the cross-examination; the plan says why it runs or why it doesn't. Below 80k it is not listed.
+- **Blind, like the rest.** Its brief has the changed files, the tests that changed *by name*, and what the free checks found, and never another reviewer's claims. It reports like a reviewer: `reviewer_brief` with lens `attack`, then `finding_submit` with reviewer `Attack` and `done: true`. Each claim names the lens the break belongs to (Correctness, Security, UI, ...), so no finding is ever "about attack".
+- **The same gate.** A claim must cite a changed line. At a line the free checks already flagged it is a second source (corroborated); elsewhere it is a hint. It can't claim proof, and nothing it says blocks a merge.
+- **Cross-examination waits for it**, and then another reviewer examines what only the attacker claimed, like any other claim.
+- Its prompt is a Markdown file, `attack.md`: yours in `~/.assay/lenses` replaces the one that ships.
+
+Assay still never calls a model: your agent runs the attack pass as one more sub-agent. Calibration doesn't score it (the scoreboard scores lenses, and a break belongs to whichever lens it is in).
+
 ## What reviewers can and can't do
 
 - A reviewer's finding is **at best corroborated**. It asks for a look; it **never blocks a merge** (only proof blocks, and only Assay produces proof).
@@ -111,7 +123,7 @@ When the agent is about to stop, Assay reviews the branch **itself** (not on the
 
 ## On the screen
 
-The **Reviewers** screen shows the plan and its cost (a preview until you plan), the six steps (free checks, Triage, reviewers, cross-exam, evidence gate, verdict), a card per reviewer (will run, waiting, working, reported, or why not), the token meter, what the gate kept and dropped, any disputes, and the words to give your agent. While a panel is running it follows what the agent reports. The case file's verdict card says where the panel stands, and a disputed claim says so under the finding. [The dashboard guide →](DASHBOARD.md)
+The **Reviewers** screen shows the plan and its cost (a preview until you plan), the six steps (free checks, Triage, reviewers, cross-exam ("cross-exam + attack" when the attack pass is planned), evidence gate, verdict), a card per reviewer (will run, waiting, working, reported, or why not), the token meter, what the gate kept and dropped, any disputes, and the words to give your agent. While a panel is running it follows what the agent reports. The case file's verdict card says where the panel stands, and a disputed claim says so under the finding. [The dashboard guide →](DASHBOARD.md)
 
 ## Calibration
 
@@ -119,4 +131,4 @@ Which reviewer earns its tokens is measured, not believed: [calibration](CALIBRA
 
 ## Not built
 
-The **attack pass** (a reviewer whose only job is to break the change, in the demo at the biggest budget) is not built. Assay can't start the sub-agents itself, because that would mean running a model, and it doesn't; if you want that, a runner is a separate, optional tool. Token usage is an estimate unless the agent reports it.
+Assay can't start the sub-agents itself, because that would mean running a model, and it doesn't; if you want that, a runner is a separate, optional tool. Token usage is an estimate unless the agent reports it.

@@ -97,14 +97,23 @@ function panelView(ctx: Ctx, c: Case, request?: string): Record<string, unknown>
   const first = c.findings.filter(f => f.origin !== 'claim' && f.tier === 'proven').length;
   const claimed = c.findings.filter(f => f.origin === 'claim').length;
   const ask = plan.request ? ` and request "${plan.request.slice(0, 200).replace(/"/g, "'")}"` : '';
-  const prompt = `Review case ${c.id} with Assay's reviewer panel. Call the assay tool reviewers_plan with case "${c.id}", budget ${plan.budget}${ask}, and follow what it says: start one sub-agent per reviewer it lists, in parallel, each told only to call reviewer_brief for its own lens and follow it. Don't show the reviewers each other's work. When reviewers_plan says the panel is done, call case_open again and tell me the verdict.`;
+  const prompt = `Review case ${c.id} with Assay's reviewer panel. Call the assay tool reviewers_plan with case "${c.id}", budget ${plan.budget}${ask}, and follow what it says: start one sub-agent per reviewer it lists, in parallel, each told only to call reviewer_brief for its own lens (the attack pass, if it lists one: lens "attack") and follow it. Don't show the reviewers each other's work. When reviewers_plan says the panel is done, call case_open again and tell me the verdict.`;
   return {
     caseId: c.id, budget, repoBudget, kept: !!kept, panel: plan, status: reviewers.statusOf(kept), cross: cross ?? plan.cross,
     disputes: (kept?.cross.disputes ?? []).map(d => ({ ...d, title: c.findings.find(f => f.id === d.finding)?.title ?? d.finding })),
     freeProven: first, freeTotal: c.findings.filter(f => f.origin !== 'claim').length, reviewerFindings: claimed,
     claims: c.claims.length, dropped: c.dropped.map(d => ({ title: d.claim.title, file: d.claim.file, line: d.claim.line, by: d.claim.source.replace(/^reviewer:/, ''), why: DROP_WHY[d.reason] ?? d.reason })),
-    prompt: budget > 0 ? prompt : '', tokensReported: plan.reviewers.reduce((n, r) => n + (r.reportedTokens ?? 0), 0)
+    prompt: budget > 0 ? prompt : '', tokensReported: plan.reviewers.reduce((n, r) => n + (r.reportedTokens ?? 0), 0) + (plan.attack?.reportedTokens ?? 0)
   };
+}
+
+/** The replay of the project's own history (D52): the last replay's scoreboard, scored from its cases each time. Read only: starting one is a command, because it opens cases and plans panels. */
+function pastView(ctx: Ctx): Record<string, unknown> {
+  const run = calibration.latestHistory(ctx.repo);
+  let board: ReturnType<typeof calibration.scoreHistory> | null = null;
+  let problem: string | null = null;
+  if (run) { try { board = calibration.scoreHistory(run); } catch (err) { problem = err instanceof Error ? err.message : String(err); } }
+  return { board, problem, prompt: run && board ? calibration.historyPrompt(run) : '', command: `assay calibrate history start --repo "${ctx.repo}"` };
 }
 
 /** The scoreboard of the newest calibration run, or what a run would plant. Scored from the two cases each time, so it moves as an agent's reviewers report. */
@@ -116,7 +125,7 @@ function calibrationView(ctx: Ctx): Record<string, unknown> {
   const left = [...calibration.routedOut(ctx.repo)].map(([lens, why]) => ({ lens, why }));
   return {
     board, problem, run: run ? { id: run.id, createdAt: run.createdAt, budget: run.budget } : null, prompt: run && board ? calibration.handoffPrompt(run.planted.case, run.control.case) : '', routedOut: left,
-    history: calibration.history(ctx.repo).length, preview: board ? null : calibration.previewCalibration(ctx.repo)
+    history: calibration.history(ctx.repo).length, preview: board ? null : calibration.previewCalibration(ctx.repo), past: pastView(ctx)
   };
 }
 

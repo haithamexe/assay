@@ -4,9 +4,9 @@ import { sha } from '../config.js';
 import { questions } from '../memory/entries.js';
 import { reviewBudget } from '../proof/settings.js';
 import { saveCase } from '../store.js';
-import type { Case, Finding, GateResult, Lens, Panel, PanelCross, PanelReviewer } from '../types.js';
-import { lensPrompt, REVIEWERS, reviewerFor, type ReviewerDef } from './lenses.js';
-import { changedFiles, estimateTokens, factsOf, sliceFor, type Facts } from './slice.js';
+import type { Case, Finding, GateResult, Lens, Panel, PanelAttack, PanelCross, PanelReviewer } from '../types.js';
+import { ATTACKER, isAttack, isPlain, lensPrompt, PLAIN, REVIEWERS, reviewerFor, type ReviewerDef } from './lenses.js';
+import { attackSlice, changedFiles, estimateTokens, factsOf, plainSlice, sliceFor, type Facts } from './slice.js';
 
 /**
  * Who is worth their tokens for this case, before any is spent (D37). Routing is plain facts about what changed; the budget is spent on the
@@ -25,6 +25,46 @@ export const k = (n: number): string => (n >= 1000 ? `${(Math.round(n / 100) / 1
 
 /** The free checks' open findings that belong to a lens: what the reviewer is told is already known, so it doesn't repeat it. */
 export const knownFor = (c: Case, lens: Lens): Finding[] => c.findings.filter(f => f.lens === lens && f.origin !== 'claim' && isOpen(c, f));
+/** All of them, for the attack pass, which has no lens. A reviewer's claim is never in it: the attacker is as blind as the others. */
+export const knownAll = (c: Case): Finding[] => c.findings.filter(f => f.origin !== 'claim' && isOpen(c, f));
+
+/** The attack pass (D50) costs the most (it reads every changed file that runs), so it is for big budgets only. */
+export const ATTACK_MIN_BUDGET = 80_000;
+const ATTACK_ANSWER = 1200;
+
+function attackEstimate(c: Case, facts: Facts): { tokens: number; files: number } {
+  const known = knownAll(c);
+  const slice = attackSlice(facts, new Set(known.map(f => f.file)));
+  const chars = PREAMBLE_CHARS + lensPrompt(ATTACKER).length + slice.chars + known.slice(0, 12).map(f => `${f.title} ${f.file}:${f.lines}`).join('\n').length;
+  return { tokens: Math.round((estimateTokens(chars) + ATTACK_ANSWER) / 100) * 100, files: slice.shown };
+}
+
+/**
+ * The passes outside the lenses that report in the first round, blind: the attack pass, and (in a calibration run only) the plain review.
+ * They are reached by name, are not lenses, and are counted with the reviewers.
+ */
+const passOf = (p: Panel, name: string): PanelAttack | undefined => (isAttack(name) ? p.attack : isPlain(name) ? p.baseline : undefined);
+const passesOf = (p: Panel): Array<{ name: string; pass: PanelAttack }> => [p.attack && { name: 'Attack', pass: p.attack }, p.baseline && { name: 'Plain', pass: p.baseline }].filter((x): x is { name: string; pass: PanelAttack } => !!x && x.pass.run);
+
+/** The plain review (D51): the whole change and nothing else, so it costs the length of the diff. */
+function planBaseline(c: Case, facts: Facts): PanelAttack {
+  const slice = plainSlice(facts);
+  const chars = PREAMBLE_CHARS + lensPrompt(PLAIN).length + slice.chars;
+  return { run: true, why: 'One plain review of the whole change, with no lens and no free findings: what the panel is measured against.', tokens: Math.round((estimateTokens(chars) + ATTACK_ANSWER) / 100) * 100, state: 'planned', claims: 0, kept: 0, merged: 0, dropped: 0 };
+}
+
+/** Whether the attack pass runs for this case: a big budget, a reviewer that is worth running, something that runs or is shown, and room left after the others and the cross-examination. */
+function planAttack(c: Case, facts: Facts, budget: number, chosen: number, spent: number): PanelAttack {
+  const base = { tokens: 0, state: 'planned' as const, claims: 0, kept: 0, merged: 0, dropped: 0 };
+  const no = (why: string, skip: NonNullable<PanelAttack['skip']>): PanelAttack => ({ ...base, run: false, why, skip });
+  if (budget === 0) return no('Free only: the attack pass stays off.', 'off');
+  if (budget < ATTACK_MIN_BUDGET) return no(`The attack pass is for budgets of ${k(ATTACK_MIN_BUDGET)} or more; this one is ${k(budget)}.`, 'budget');
+  if (!chosen) return no('No reviewer is worth running for this change, so there is nothing to attack.', 'not-needed');
+  if (facts.logicAdds < 10 && facts.uiFiles === 0) return no('Nothing that runs or is shown changed, so there is nothing to break.', 'not-needed');
+  const est = attackEstimate(c, facts);
+  if (spent + est.tokens > budget) return no(`Over budget: needs ${k(est.tokens)}, ${k(Math.max(0, budget - spent))} left.`, 'budget');
+  return { ...base, run: true, why: `Tries to break ${est.files} changed file${est.files === 1 ? '' : 's'} with concrete inputs and sequences.`, tokens: est.tokens };
+}
 
 interface Route { def: ReviewerDef; relevant: boolean; why: string; skipWhy: string; score: number; skip?: PanelReviewer['skip'] }
 
@@ -57,10 +97,10 @@ function estimate(c: Case, def: ReviewerDef, facts: Facts, request: string | nul
   return Math.round((estimateTokens(chars) + ANSWER_ALLOWANCE) / 100) * 100;
 }
 
-export const panelId = (c: Case, budget: number, request: string | null, include: Lens[] = []): string => `p-${sha([c.id, budget, request ?? '', [...include].sort().join(',')].join('\0'), 8)}`;
+export const panelId = (c: Case, budget: number, request: string | null, include: Lens[] = [], baseline = false): string => `p-${sha([c.id, budget, request ?? '', [...include].sort().join(','), ...(baseline ? ['baseline'] : [])].join('\0'), 8)}`;
 
-/** Works the plan out without keeping it. Reads git (the diffs) and the case. */
-export function previewPanel(c: Case, opts: { budget?: number; request?: string | null; include?: Lens[] } = {}): Panel {
+/** Works the plan out without keeping it. Reads git (the diffs) and the case. `baseline` adds the plain review (calibration runs only). */
+export function previewPanel(c: Case, opts: { budget?: number; request?: string | null; include?: Lens[]; baseline?: boolean } = {}): Panel {
   const budget = Math.max(0, Math.min(400_000, Math.round(opts.budget ?? reviewBudget(c.repo))));
   const request = opts.request?.trim() ? opts.request.trim().slice(0, MAX_REQUEST) : null;
   const facts = factsOf(changedFiles(c));
@@ -95,15 +135,19 @@ export function previewPanel(c: Case, opts: { budget?: number; request?: string 
   });
   const specialists = reviewers.reduce((n, r) => n + r.tokens, 0);
   const saved = routes.filter(r => !r.relevant && budget > 0).reduce((n, r) => n + (cost.get(r.def.lens) as number), 0);
+  const attack = planAttack(c, facts, budget, chosen.size, specialists + crossTokens);
+  const baseline = opts.baseline && budget > 0 ? planBaseline(c, facts) : undefined;
   return {
-    id: panelId(c, budget, request, [...include]), createdAt: now, updatedAt: now, budget, request, reviewers,
+    id: panelId(c, budget, request, [...include], !!baseline), createdAt: now, updatedAt: now, budget, request, reviewers,
     cross: { run: crossTokens > 0, tokens: crossTokens, state: 'planned', assigned: {}, briefed: [], reported: [], confirmed: 0, disputes: [] },
-    estimate: { total: specialists + crossTokens, specialists, cross: crossTokens, saved }
+    attack,
+    ...(baseline ? { baseline } : {}),
+    estimate: { total: specialists + crossTokens + attack.tokens + (baseline?.tokens ?? 0), specialists, cross: crossTokens, saved, attack: attack.tokens, ...(baseline ? { baseline: baseline.tokens } : {}) }
   };
 }
 
 /** Plans the panel and keeps it with the case. Planning again with the same budget and request keeps what has been reported. */
-export function planPanel(c: Case, opts: { budget?: number; request?: string | null; include?: Lens[] } = {}): Panel {
+export function planPanel(c: Case, opts: { budget?: number; request?: string | null; include?: Lens[]; baseline?: boolean } = {}): Panel {
   const fresh = previewPanel(c, opts);
   if (c.panel && c.panel.id === fresh.id) return c.panel;
   c.panel = fresh;
@@ -116,6 +160,11 @@ const reviewerOf = (p: Panel, name: string): PanelReviewer | undefined => { cons
 /** A reviewer was handed its brief. */
 export function markBriefed(c: Case, name: string, round: 1 | 2): void {
   const p = c.panel;
+  const pass = p && passOf(p, name);
+  if (p && (isAttack(name) || isPlain(name))) {
+    if (pass?.run && pass.state === 'planned') { pass.state = 'briefed'; pass.briefedAt = new Date().toISOString(); p.updatedAt = pass.briefedAt; saveCase(c); }
+    return;
+  }
   const r = p && reviewerOf(p, name);
   if (!p || !r) return;
   const now = new Date().toISOString();
@@ -128,6 +177,16 @@ export function markBriefed(c: Case, name: string, round: 1 | 2): void {
 /** What came back from a reviewer, counted by what the gate did with it. A reviewer that says it is done is done even with nothing to report. */
 export function recordSubmission(c: Case, name: string, result: GateResult, o: { round: 1 | 2; done: boolean; tokens?: number; claims: number; disputes: Array<{ finding: string; reason: string }> }): void {
   const p = c.panel;
+  const extra = p && passOf(p, name);
+  if (p && extra) {
+    const a = extra;
+    const at = new Date().toISOString();
+    a.claims += o.claims; a.kept += result.kept.length; a.merged += result.merged.length; a.dropped += result.dropped.length;
+    if (o.done) { a.state = 'reported'; a.reportedAt = at; if (o.tokens) a.reportedTokens = o.tokens; }
+    p.updatedAt = at;
+    saveCase(c);
+    return;
+  }
   const r = p && reviewerOf(p, name);
   if (!p || !r) return;
   const now = new Date().toISOString();
@@ -150,8 +209,10 @@ export function openCross(c: Case): PanelCross | null {
   if (!p || !p.cross.run) return null;
   if (p.cross.state !== 'planned') return p.cross;
   const ran = p.reviewers.filter(r => r.run);
-  if (!ran.length || ran.some(r => r.state !== 'reported')) return p.cross;
-  const claimed = c.findings.filter(f => f.origin === 'claim' && f.tier === 'hint' && f.present !== false && !c.resolved[f.id] && f.evidence.filter(e => e.source.startsWith('reviewer:')).length === 1);
+  // The attack pass (and, in calibration, the plain review) report in the same round, blind like the others. What the attacker claims is
+  // cross-examined with the rest; the plain review is a measuring stick, so what only it claimed is left alone.
+  if (!ran.length || ran.some(r => r.state !== 'reported') || passesOf(p).some(x => x.pass.state !== 'reported')) return p.cross;
+  const claimed = c.findings.filter(f => f.origin === 'claim' && f.tier === 'hint' && f.present !== false && !c.resolved[f.id] && f.evidence.filter(e => e.source.startsWith('reviewer:')).length === 1 && !f.evidence.some(e => e.source === 'reviewer:Plain'));
   const ring = ran.map(r => r.lens);
   const assigned: Record<string, string[]> = {};
   for (const f of [...claimed].sort((a, b) => b.risk - a.risk || a.id.localeCompare(b.id))) {
@@ -185,12 +246,18 @@ export interface PanelStatus {
 
 export function statusOf(p: Panel | undefined | null): PanelStatus {
   if (!p) return { planned: false, running: 0, reported: 0, phase: 'off', next: 'Plan the reviewers first: reviewers_plan.' };
+  // The attack pass (and the plain review, in calibration) are more reviewers in the first round: blind, and counted with the others.
+  const extra = passesOf(p);
   const ran = p.reviewers.filter(r => r.run);
-  const reported = ran.filter(r => r.state === 'reported').length;
+  const total = ran.length + extra.length;
+  const reported = ran.filter(r => r.state === 'reported').length + extra.filter(x => x.pass.state === 'reported').length;
   if (!ran.length) return { planned: true, running: 0, reported: 0, phase: 'off', next: p.budget === 0 ? 'The budget is free-only, so no reviewer runs.' : 'No reviewer is worth its tokens for this change.' };
-  if (reported < ran.length) return { planned: true, running: ran.length, reported, phase: reported ? 'reviewing' : 'waiting', next: `${ran.length - reported} reviewer${ran.length - reported === 1 ? '' : 's'} still to report: ${ran.filter(r => r.state !== 'reported').map(r => r.lens).join(', ')}.` };
-  if (p.cross.run && p.cross.state !== 'done') return { planned: true, running: ran.length, reported, phase: 'cross', next: p.cross.state === 'planned' ? 'Every reviewer has reported. Cross-examination can open: reviewers_plan opens it.' : `Cross-examination is open: ${Object.keys(p.cross.assigned).filter(l => !p.cross.reported.includes(l)).join(', ')} still to examine.` };
-  return { planned: true, running: ran.length, reported, phase: 'done', next: 'The panel is done. Read the verdict again with case_open, and fix what it says.' };
+  if (reported < total) {
+    const waiting = [...ran.filter(r => r.state !== 'reported').map(r => r.lens as string), ...extra.filter(x => x.pass.state !== 'reported').map(x => x.name)];
+    return { planned: true, running: total, reported, phase: reported ? 'reviewing' : 'waiting', next: `${waiting.length} reviewer${waiting.length === 1 ? '' : 's'} still to report: ${waiting.join(', ')}.` };
+  }
+  if (p.cross.run && p.cross.state !== 'done') return { planned: true, running: total, reported, phase: 'cross', next: p.cross.state === 'planned' ? 'Every reviewer has reported. Cross-examination can open: reviewers_plan opens it.' : `Cross-examination is open: ${Object.keys(p.cross.assigned).filter(l => !p.cross.reported.includes(l)).join(', ')} still to examine.` };
+  return { planned: true, running: total, reported, phase: 'done', next: 'The panel is done. Read the verdict again with case_open, and fix what it says.' };
 }
 
 /** The questions from the project's memory that are for a lens, for its brief. */

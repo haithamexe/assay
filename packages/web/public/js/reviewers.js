@@ -43,7 +43,7 @@ async function tick() {
 }
 
 /** A calibration run is waiting for reviewers to report: the scoreboard moves as they do. */
-const calLive = () => !!(S.rv.cal && S.rv.cal.board && !S.rv.cal.board.complete && S.rv.tab === 'score');
+const calLive = () => !!(S.rv.cal && S.rv.tab === 'score' && ((S.rv.cal.board && !S.rv.cal.board.complete) || (S.rv.cal.past && S.rv.cal.past.board && !S.rv.cal.past.board.complete)));
 
 const BADGE = {
   off: ['Off', ''], budget: ['Over budget', ''], 'not-needed': ['Not needed', ''], 'no-request': ['No request', ''], calibration: ['Left out', 'badge-warn']
@@ -64,12 +64,17 @@ function steps(d) {
   const of = r => (!d.kept ? 'pending' : r.state === 'reported' ? 'done' : r.state === 'briefed' ? 'running' : 'pending');
   const specState = !spec.length ? 'skipped' : !d.kept ? 'pending' : spec.every(r => r.state === 'reported') ? 'done' : spec.some(r => r.state !== 'planned') ? 'running' : 'pending';
   const crossState = !p.cross.run ? 'skipped' : p.cross.state === 'done' ? 'done' : p.cross.state === 'open' ? 'running' : 'pending';
-  const gated = d.kept && p.reviewers.some(r => r.claims > 0);
+  // The attack pass (one more blind reviewer, outside the lenses) shares the step with cross-exam, as in the demo.
+  const atk = p.attack && p.attack.run ? p.attack : null;
+  const atkState = !atk ? 'skipped' : !d.kept ? 'pending' : atk.state === 'reported' ? 'done' : atk.state === 'briefed' ? 'running' : 'pending';
+  const both = [crossState, atkState].filter(s => s !== 'skipped');
+  const crossStep = !both.length ? 'skipped' : both.every(s => s === 'done') ? 'done' : both.includes('running') ? 'running' : 'pending';
+  const gated = d.kept && (p.reviewers.some(r => r.claims > 0) || (atk && atk.claims > 0));
   return [
     ['Free checks', '0 tokens', 'done'],
     ['Triage', tri.run ? `~${k(tri.tokens)}` : 'off', tri.run ? of(tri) : 'skipped'],
     ['Reviewers', `${spec.length} of 6 · blind`, specState],
-    ['Cross-exam', p.cross.run ? `~${k(p.cross.tokens)}` : 'skipped', crossState],
+    [atk ? 'Cross-exam + attack' : 'Cross-exam', p.cross.run || atk ? `~${k((p.cross.run ? p.cross.tokens : 0) + (atk ? atk.tokens : 0))}` : 'skipped', crossStep],
     ['Evidence gate', 'no proof, no vote', gated ? 'done' : 'pending'],
     ['Verdict', 'proven blocks', d.kept && d.status.phase === 'done' ? 'done' : 'pending']
   ];
@@ -86,23 +91,26 @@ function meterHTML(d) {
   const p = d.panel;
   const tri = p.reviewers.filter(r => r.lens === 'Scope').reduce((n, r) => n + r.tokens, 0);
   const spec = p.estimate.specialists - tri;
+  const atkTokens = p.attack && p.attack.run ? p.attack.tokens : 0;
   const cap = Math.max(d.budget, p.estimate.total, 1);
   const seg = (v, c) => (v > 0 ? html`<i class="${c}" data-css="width:${Math.min(100, (v / cap) * 100)}%"></i>` : '');
   const saved = p.estimate.saved;
   const added = d.reviewerFindings;
   const per = added ? k(Math.round((d.tokensReported || p.estimate.specialists) / added)) : '—';
   return html`<div class="card card-pad meter"><div class="section-head"><span class="card-title">Tokens ${d.tokensReported ? '' : html`<span class="dim">(estimate)</span>`}</span><span class="dim">${k(p.estimate.total)} of ${d.budget ? `${k(d.budget)} budget` : 'a free-only budget'}</span></div>
-    <div class="meterbar" role="img" aria-label="${k(p.estimate.total)} tokens of ${k(d.budget)}">${seg(tri, 't1')}${seg(spec, 't2')}${seg(p.cross.run ? p.cross.tokens : 0, 'tc')}</div>
-    <div class="meterlegend"><span class="l1">Triage ${k(tri)}</span><span class="l2">Reviewers ${k(spec)}</span><span class="lc">Cross-exam ${k(p.cross.run ? p.cross.tokens : 0)}</span></div>
+    <div class="meterbar" role="img" aria-label="${k(p.estimate.total)} tokens of ${k(d.budget)}">${seg(tri, 't1')}${seg(spec, 't2')}${seg(p.cross.run ? p.cross.tokens : 0, 'tc')}${seg(atkTokens, 't3')}</div>
+    <div class="meterlegend"><span class="l1">Triage ${k(tri)}</span><span class="l2">Reviewers ${k(spec)}</span><span class="lc">Cross-exam ${k(p.cross.run ? p.cross.tokens : 0)}</span>${atkTokens ? html`<span class="l3">Attack ${k(atkTokens)}</span>` : ''}</div>
     <div class="bignums"><div class="bignum"><b>${d.freeProven} of ${d.freeTotal}</b><span>findings the free checks already proved, at 0 tokens</span></div><div class="bignum"><b>~${k(saved)}</b><span>tokens not spent: lenses this change doesn’t touch</span></div><div class="bignum"><b>${per}</b><span>tokens per reviewer-added finding</span></div></div>
     <p class="dim">Counted by characters, so roughly: about four characters to a token. The agent can report what it really used.</p></div>`;
 }
 
 function gateHTML(d) {
   const p = d.panel;
-  const any = d.kept && (d.claims > 0 || p.reviewers.some(r => r.state === 'reported'));
-  if (!any && !p.cross.run) return '';
-  const keptN = p.reviewers.reduce((n, r) => n + r.kept + r.merged, 0);
+  const atk = p.attack && p.attack.run ? p.attack : null;
+  const any = d.kept && (d.claims > 0 || p.reviewers.some(r => r.state === 'reported') || (atk && atk.state === 'reported'));
+  if (!any && !p.cross.run && !atk) return '';
+  const keptN = p.reviewers.reduce((n, r) => n + r.kept + r.merged, 0) + (atk ? atk.kept + atk.merged : 0);
+  const atkLine = !atk ? '' : atk.state === 'reported' ? `The attack pass tried to break the change: ${plural(atk.claims, 'claim')}, ${atk.kept + atk.merged} kept.` : atk.state === 'briefed' ? 'The attack pass is working on it.' : 'The attack pass is waiting to start.';
   const cross = d.cross;
   const crossLine = !p.cross.run ? 'Fewer than two reviewers are planned, so there is nobody to cross-examine.'
     : cross.state === 'done' ? `Cross-examination is done: ${plural(cross.confirmed, 'claim')} confirmed by a second reviewer, ${plural(d.disputes.length, 'dispute')} raised.`
@@ -111,6 +119,7 @@ function gateHTML(d) {
   return html`<div class="card card-pad stack-12"><div class="card-title">Cross-exam and the evidence gate</div>
     ${any ? html`<p><b>${d.claims}</b> claims came in. <b>${keptN}</b> cited a line in the change and are kept. <b>${d.dropped.length}</b> ${d.dropped.length === 1 ? 'was' : 'were'} dropped for citing none${d.dropped.length ? ':' : '.'}</p>` : html`<p class="dim">Nothing has come back yet.</p>`}
     ${d.dropped.length ? html`<ul class="dropped">${d.dropped.map(x => html`<li>${ico.x}<span><s>${x.title}</s> · ${x.by}: ${x.why}</span></li>`)}</ul>` : ''}
+    ${atkLine ? html`<p class="dim">${atkLine}</p>` : ''}
     <p class="dim">${crossLine}</p>
     ${d.disputes.length ? html`<div class="callout callout-ai">${ico.users}<div><b>Disputed.</b>${d.disputes.map(x => html`<br>${x.title}: ${x.by} says ${x.reason}`)} <span class="dim">A dispute changes no tier: what a reviewer alone says stays a hint.</span></div></div>` : ''}
     <div class="toolbar"><a class="btn btn-primary" href="#/case?id=${encodeURIComponent(d.caseId)}">${ico.file} Back to the case file</a></div></div>`;
@@ -118,11 +127,36 @@ function gateHTML(d) {
 
 /* ---------------------------------------------------------------- the scoreboard: does each reviewer earn its tokens? */
 const MARK = { C: ['✓', 'C', 'Caught, with proof'], h: ['~', 'h', 'Flagged, no proof'], m: ['✗', 'm', 'Missed'], '-': ['·', 'na', 'Not this reviewer’s lens'], n: ['?', 'na', 'Not run'] };
-const SHORT = { free: 'Free', Security: 'Sec', Correctness: 'Cor', UI: 'UI', Tests: 'Tests', 'Supply chain': 'Supply', Performance: 'Perf' };
+const SHORT = { free: 'Free', plain: 'Plain', Security: 'Sec', Correctness: 'Cor', UI: 'UI', Tests: 'Tests', 'Supply chain': 'Supply', Performance: 'Perf' };
 const COLS = ['Security', 'Correctness', 'UI', 'Tests', 'Supply chain', 'Performance'];
 const mark = c => { const [g, cls, tip] = MARK[c] || MARK.n; return html`<span class="${cls}" title="${tip}">${g}</span>`; };
 
+/* ---------------------------------------------------------------- real bugs from the project's own history (read only: starting one is a command) */
+function pastHTML(p) {
+  if (!p) return '';
+  if (!p.board) {
+    return html`<div class="card card-pad stack-12"><div class="card-title">From your own history</div>
+      <p class="dim limit-copy">The planted bugs are invented. Your own fix commits are real: a line a fix removed came in with an earlier commit. Assay can open each of those commits as a case, score the free checks on it at once, and have your agent run the reviewers, the attack pass and one plain review on it, scored on whether they flagged the line the fix later removed. It reads git and changes nothing, so it is a command: <code>${p.command}</code>.</p>
+      ${p.problem ? html`<p class="dim">${p.problem}</p>` : ''}</div>`;
+  }
+  const b = p.board;
+  const rows = b.rows.map(r => html`<tr><td><b>${r.name}</b></td><td class="num">${r.caught}</td><td class="num">${r.flagged}</td><td class="num">${r.missed}</td><td class="num">${r.id === 'free' ? '0' : r.perCatch !== null ? html`${k(r.perCatch)}${r.tokensKind === 'estimate' ? '~' : ''}` : '—'}</td><td class="dim">${r.advice}</td></tr>`);
+  const bugs = b.bugs.map(x => html`<li><span class="mk">${mark(x.free)}</span> <code>${x.bug.file}:${x.bug.line}</code> <span class="dim">came in with “${x.bug.subject}”, fixed by “${x.bug.fixSubject}”</span></li>`);
+  return html`<div class="card card-pad stack-12"><div class="card-title">From your own history</div>
+    <div class="callout ${b.rows.length > 1 ? 'callout-ai' : ''}">${ico.shield}<div><b>${b.freeProven} of ${b.total} real past bugs were caught by the free checks alone, with proof, when they came in</b> (${b.freeSeen - b.freeProven} more flagged, ${b.total - b.freeSeen} missed), at 0 tokens. ${b.rows.length > 1 ? html`With the reviewers: ${b.seen} of ${b.total} flagged by someone.` : 'The reviewers have not been run yet.'} <span class="dim">${plural(b.elsewhere, 'more flag')} elsewhere in those commits are not counted: nobody knows those lines are clean. A removed line is a proxy for the defect, so this is a sample of your own history, not a verdict.</span></div></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Reviewer</th><th class="num">Caught</th><th class="num">Flagged only</th><th class="num">Missed</th><th class="num" title="About four characters to a token unless the agent reported its use">Tokens per catch</th><th>What it suggests</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <ul class="pastbugs">${bugs}</ul>
+    ${b.rows.length > 1 ? '' : html`<p class="dim limit-copy">Assay never calls a model, so your agent runs them. Give it this; the scoreboard fills in as they report.</p><textarea class="brief" readonly rows="5" aria-label="What to give your agent for the replay">${p.prompt}</textarea>`}
+    <p class="dim">${b.commits === 1 ? 'One commit' : `${b.commits} commits`} replayed, ${new Date(b.createdAt).toISOString().slice(0, 10)}. <code>assay calibrate history clean</code> forgets it.</p></div>`;
+}
+
 function scoreHTML() {
+  const base = plantedHTML();
+  const cal = S.rv.cal;
+  return cal && !S.rv.calError ? html`${base}${pastHTML(cal.past)}` : base;
+}
+
+function plantedHTML() {
   const cal = S.rv.cal;
   if (S.rv.calError) return html`<div class="callout" role="alert">${ico.alert}<div><b>That didn’t work.</b><br><span class="dim">${S.rv.calError}</span></div></div>`;
   if (!cal) return loading('Scoreboard', 'Reading the scoreboard…');
@@ -137,8 +171,9 @@ function scoreHTML() {
   }
   const b = cal.board;
   const rows = b.rows.map(r => html`<tr><td><b>${r.name}</b></td><td class="num">${r.ran ? r.caught : '·'}</td><td class="num">${r.ran ? r.flagged : '·'}</td><td class="num">${r.ran ? r.missed : '·'}</td><td class="num">${r.ran ? r.alarms : '·'}</td><td class="num">${r.id === 'free' ? '0' : r.perCatch !== null ? html`${k(r.perCatch)}${r.tokensKind === 'estimate' ? '~' : ''}` : '—'}</td><td class="dim">${r.advice}</td></tr>`);
-  const head = html`<div class="mx-row mx-7 mx-head"><div>Planted bug</div>${['free', ...COLS].map(l => html`<div title="${l === 'free' ? 'Free checks (no model)' : l}">${SHORT[l]}</div>`)}</div>`;
-  const body = b.bugs.map((x, i) => html`<div class="mx-row mx-7"><div>${i + 1}. ${x.bug.name}</div><div>${mark(x.free)}</div>${COLS.map(l => html`<div>${mark(x.cells[l])}</div>`)}</div>`);
+  const hasPlain = b.rows.some(r => r.id === 'plain');
+  const head = html`<div class="mx-row ${hasPlain ? 'mx-8' : 'mx-7'} mx-head"><div>Planted bug</div>${['free', ...COLS, ...(hasPlain ? ['plain'] : [])].map(l => html`<div title="${l === 'free' ? 'Free checks (no model)' : l}">${SHORT[l]}</div>`)}</div>`;
+  const body = b.bugs.map((x, i) => html`<div class="mx-row ${hasPlain ? 'mx-8' : 'mx-7'}"><div>${i + 1}. ${x.bug.name}</div><div>${mark(x.free)}</div>${COLS.map(l => html`<div>${mark(x.cells[l])}</div>`)}${hasPlain ? html`<div>${mark(x.plain)}</div>` : ''}</div>`);
   return html`<div class="toolbar">${btn}<button class="btn btn-sm btn-ghost" data-act="rv-calclear">Clear the throwaway repositories</button></div>
     <div class="callout ${b.reviewersRan ? 'callout-ai' : ''}">${ico.shield}<div><b>${b.freeProven} of ${b.planted} planted bugs were caught by the free checks alone, with proof, at 0 tokens</b> (${b.freeSeen - b.freeProven} more flagged, ${b.planted - b.freeSeen} missed, ${b.rows[0].alarms ? b.rows[0].alarms + ' false alarms' : 'no false alarms'} on the clean twins). ${b.reviewersRan ? html`With the reviewers: ${b.seen} of ${b.planted} flagged by someone.${b.complete ? '' : ' Not every reviewer has reported yet.'}` : 'The reviewers have not been run yet.'}</div></div>
     ${cal.routedOut.length ? html`<div class="callout">${ico.alert}<div><b>Left out of plans:</b>${cal.routedOut.map(x => html`<br>${x.lens}: ${x.why}`)}<br><span class="dim">Bring one back with <code>assay reviewers plan --include &lt;lens&gt;</code>.</span></div></div>` : ''}

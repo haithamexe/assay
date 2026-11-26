@@ -171,6 +171,28 @@ export interface PanelCross {
   disputes: Array<{ finding: string; by: string; reason: string }>;
 }
 
+/**
+ * The attack pass (D50): one more reviewer, outside the lenses, whose only job is to break the change with a concrete input or sequence.
+ * It is independent (it never sees another reviewer's claims, only what the free checks found), it costs the most, so it only runs on a
+ * big budget and only when something that runs changed, and what it reports meets the same evidence gate: at best corroborated.
+ */
+export interface PanelAttack {
+  run: boolean;
+  /** Why it runs, or why it doesn't. */
+  why: string;
+  skip?: 'not-needed' | 'budget' | 'off';
+  /** Tokens it is estimated to cost: the brief, every changed file that runs, and room for an answer. Roughly. */
+  tokens: number;
+  state: 'planned' | 'briefed' | 'reported';
+  briefedAt?: string;
+  reportedAt?: string;
+  claims: number;
+  kept: number;
+  merged: number;
+  dropped: number;
+  reportedTokens?: number;
+}
+
 export interface Panel {
   id: string;
   createdAt: string;
@@ -181,7 +203,11 @@ export interface Panel {
   request: string | null;
   reviewers: PanelReviewer[];
   cross: PanelCross;
-  estimate: { total: number; specialists: number; cross: number; saved: number };
+  /** Absent in a panel kept before the attack pass existed. */
+  attack?: PanelAttack;
+  /** Only in calibration runs (D51): one plain review of the whole change, the stick the panel is measured against. Same shape as the attack pass. */
+  baseline?: PanelAttack;
+  estimate: { total: number; specialists: number; cross: number; saved: number; attack?: number; baseline?: number };
 }
 
 export interface RunRecord {
