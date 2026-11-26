@@ -199,7 +199,8 @@ b.style.width = (Math.ceil(s.getBoundingClientRect().width) + 2) + 'px';
 s.remove();
 </script></body></html>
 `;
-const AR_CSS_BASE = 'body{font:16px system-ui;margin:16px}\n.pay{padding:0;min-height:44px;font:600 14px system-ui}\n';
+// content-box, so the width the script sets is the room the text has, whatever the platform's default border on a button is
+const AR_CSS_BASE = 'body{font:16px system-ui;margin:16px}\n.pay{padding:0;min-height:44px;font:600 14px system-ui;box-sizing:content-box}\n';
 const AR_CSS_HEAD = AR_CSS_BASE.replace('.pay{padding:0;', '.pay{padding:0;overflow:hidden;white-space:nowrap;');
 
 t('text that fits in English and not in Arabic is found, and the finding says it is the Arabic text that does it', async () => {
