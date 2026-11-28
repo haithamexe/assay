@@ -4,6 +4,10 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ## Unreleased
 
+### Changed
+
+- **`assay look --json` names its contract and lists the findings.** The answer now starts with `schema: "assay.look/1"` and carries the browser findings (title, severity, tier, file, line, what was observed) next to the report's counts, so another tool can show what the pages did without reading the case. Only fields were added.
+
 ### Fixed
 
 **Found by running the free checks over the recent history of eight real projects** (565 commits, read only), then on a copy of Assay itself

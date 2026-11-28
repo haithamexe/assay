@@ -190,6 +190,10 @@ bt('look is refused until allowed, then opens the pages in a real browser and fi
   assert.match(r.out, /new problems\s+1 measured at the head/);
   assert.match(r.out, /Things overlap on \/ when mirrored \(right to left\)/);
   assert.match(r.out, /look different/);
+  const j = JSON.parse(runWeb('look', `${webBase}..HEAD`, '--no-probe', '--json').out) as { schema: string; findings: Array<{ title: string; severity: string; tier: string }>; look: { ran: boolean } };
+  assert.equal(j.schema, 'assay.look/1', 'the answer names its contract, so a sister tool can read it');
+  assert.equal(j.look.ran, true);
+  assert.ok(j.findings.some(f => /Things overlap on \/ when mirrored/.test(f.title) && f.tier === 'proven'), 'the measured problems are listed, not only counted');
 });
 
 bt('the report carries a before and after you can slide', () => {

@@ -295,7 +295,7 @@ async function main(): Promise<void> {
       onProgress: m => { if (!json) console.error(dim(m)); }
     });
     const v = verdictOf(c);
-    if (json) console.log(JSON.stringify({ look: report, verdict: { tone: v.tone, headline: v.headline } }, null, 2));
+    if (json) console.log(JSON.stringify({ schema: 'assay.look/1', look: report, findings: c.findings.filter(f => f.check === 'browser').slice(0, 100).map(f => ({ id: f.id, title: f.title, severity: f.severity, tier: f.tier, file: f.file, line: f.line, observed: f.observed.slice(0, 4), inferred: f.inferred.slice(0, 2) })), verdict: { tone: v.tone, headline: v.headline } }, null, 2));
     else { console.log(lookText(report)); console.log(); console.log(caseText(c, v, a.flags.all === true)); }
     const gate = str(a, 'fail-on');
     if ((gate === 'blocked' && v.tone === 'blocked') || (gate === 'mergeable' && v.tone !== 'clear')) process.exitCode = 2;
