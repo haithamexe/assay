@@ -79,6 +79,12 @@ details.commits[open] > summary { border-bottom: 1px solid var(--border); }
   .mem { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* gremlins */
+.steps { margin: var(--s2) 0 0; padding-left: 1.6em; display: grid; gap: 4px; }
+.steps code, code.wrap { overflow-wrap: anywhere; white-space: pre-wrap; }
+.linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* reviewers */
 .meterlegend .l1 { --c: var(--h-violet-fill); }
 .meterlegend .l2 { --c: var(--second); }

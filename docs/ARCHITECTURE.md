@@ -5,7 +5,7 @@ How the code is arranged, the data it keeps, and the flows. Back to the [README]
 ## Packages
 
 ```
-packages/core    the engine. Only Node: no runtime dependencies.
+packages/core    the engine. Only Node, plus plainkit: our own small kit with no dependencies (the DevTools pipe client, the browser search, atomic writes, stopping a process tree).
 packages/cli     the `assay` command          ──▶ core
 packages/mcp     the MCP server (`assay-mcp`) ──▶ core, @modelcontextprotocol/sdk, zod
 packages/web     the dashboard                ──▶ core. node:http, no other dependency
@@ -38,11 +38,15 @@ packages/core/src/
   doctor.ts       what is installed (the CLI and the dashboard show the same list)
   report.ts       the one-file HTML report; exports where the stylesheet and fonts live
   checks/         secrets · risky (line and hunk rules) · deps · tests
-  proof/          settings (allow-run) · runner · parse · tree · mutate · prove · apply
+  upgrade/        try an upgrade (D67): two copies, the install, the checks, the pages, the verdict
+  gremlins/       gremlins (D65): a seeded browser run through the app, the steps behind each problem
+  attack/         attack my app (D64): the requests, the findings and their tiers
+  proof/          settings (allow-run) · runner · parse · tree · mutate · prove · apply · testrun (`assay test`, D61) · reports (each runner's own report) · coverage
   browser/        find · cdp · serve · inspect · look
   calibration/    bugs (the templates) · build (the throwaway repository) · score (the scoreboard) · record (runs, history, who is left out)
   reviewers/      lenses · slice (what changed, each lens's slice) · plan (routing, budget, panel state, cross-exam) · brief · hook (the Stop hook) · format
   memory/         db (node:sqlite, fail-soft) · packs (files) · entries (stats, expiry, learned) · runtime (what changes an analysis) · mine (fix commits)
+  project/        project mode (D60): tree (every tracked file, read from git in batches) · inputs (the app's address, pages, HAR, flows, OpenAPI) · routes (pages and endpoints from the project's files) · checkup (the checkup, the comparison, what is kept)
 packages/core/assets/   the report's stylesheet and the three fonts, packs/ (the standards packs that ship) and lenses/ (the reviewers' prompts)
 ```
 
@@ -82,6 +86,7 @@ Under `~/.assay` (or `ASSAY_HOME`). Files are written whole (a temp file, then a
   calibration/<run>/run.json              what was planted and where; calibration/<repo>.json: the runs and what each finished run showed
   hooks/<session>.json                    how many times the Stop hook has blocked a session
   cases/<case id>.json                    a case: commits, findings, claims, resolutions, runs
+  checkups/<repo>/<checkup id>.json       a checkup of the project as it is (the last 30 per repository)
   cache/<repo>/<commit>.json              one commit's analysis; versioned (ANALYSIS_VERSION) and keyed by the memory digest
   runs/<repo>/<commit>-<hash>.json        one test run: the tests, a revert, or a deliberate change
   shots/<case id>/*.base|head|diff.jpg    before and after pictures

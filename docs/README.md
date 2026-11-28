@@ -8,6 +8,7 @@ Back to the [README](../README.md).
 |---|---|
 | [Getting started](GETTING-STARTED.md) | Install, your first review, proof, browser checks, the MCP server, CI |
 | [Usage](USAGE.md) | Every command and flag, ranges, exit codes, environment |
+| [Project mode](PROJECT-MODE.md) | `assay checkup`: the project as it is rather than a change, what is new since the last checkup, the HAR, flow and OpenAPI inputs, and the JSON contract for other tools |
 | [Dashboard](DASHBOARD.md) | The screens, what each button does, how it is kept safe |
 | [Calibration](CALIBRATION.md) | Planting known bugs to score the free checks and each reviewer; leaving out a reviewer that earns nothing |
 | [Reviewers](REVIEWERS.md) | The reviewer panel: who is worth running, the cost first, blind briefs, cross-examination, the Stop hook |

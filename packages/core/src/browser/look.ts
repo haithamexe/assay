@@ -11,7 +11,9 @@ import { saveCase } from '../store.js';
 import type { Case, Evidence, Finding, Lens, RunRecord, Severity, ShotRecord } from '../types.js';
 import { Browser, type Page } from './cdp.js';
 import { findBrowser } from './find.js';
-import { ARABIC_RESTORE_SRC, ARABIC_SRC, DIFF_SRC, INSPECT_SRC, PROBE_NAMES_SRC, probeTypeSrc, type InPageProblem, type InspectResult } from './inspect.js';
+import { addedLineWith, findTranslationFiles, readTranslations, TEXTS_SRC, translationLibrary, translationMatcher, untranslatedTexts, whereWords, type PageText } from './i18n.js';
+import { callsOf, compareCalls, heavierThan, medianPerf, slowerThan, type CallChange, type CallSummary } from './health.js';
+import { ARABIC_RESTORE_SRC, ARABIC_SRC, DIFF_SRC, INSPECT_SRC, PERF_INIT_SRC, PERF_READ_SRC, PROBE_NAMES_SRC, probeTypeSrc, type InPageProblem, type InspectResult, type PagePerf } from './inspect.js';
 import { devServer, staticServer, type Served } from './serve.js';
 
 export interface LookOptions {
@@ -21,6 +23,8 @@ export interface LookOptions {
   probe?: boolean;
   /** Keep before and after screenshots. Default true. */
   screens?: boolean;
+  /** Load each page three more times at each end (desktop, light) to compare how fast it is (D62). Default true. */
+  speed?: boolean;
   /** Stop starting new pages after this long. Default 300. */
   budgetSeconds?: number;
   /** Look without saving anything to the case (used by replay). */
@@ -42,6 +46,12 @@ export interface LookReport {
   newProblems: number;
   probeHits: number;
   looksDifferent: number;
+  /** How fast each page loaded at each end (the median of three loads), and what got clearly slower or heavier (D62). */
+  speed?: Array<{ page: string; base: PagePerf; head: PagePerf; slower?: string; heavier?: string }>;
+  /** What changed underneath on each page: its data calls, its console warnings, its title (D62). Only the worse ones are findings. */
+  calls?: Array<{ page: string; changes: CallChange[] }>;
+  /** The translation check (D63): the files read at the head, the library, how many texts the pages showed and how many of them no file has. */
+  translation?: { files: number; library?: string; texts: number; untranslated: number; note?: string };
   secs: number;
   stopped?: string;
 }
@@ -55,7 +65,7 @@ const PAYLOAD = '"\'><assay-probe data-assay></assay-probe>';
 export const COMBOS = VIEWPORTS.length * SCHEMES.length * DIRS.length;
 const comboLabel = (id: string): string => { const [v, s, d] = id.split('|'); return `${v}, ${s} scheme, ${d === 'rtl' ? 'mirrored' : d === 'ar' ? 'with Arabic text' : 'as loaded'}`; };
 
-interface Problem extends InPageProblem { combo: string; key: string }
+export interface Problem extends InPageProblem { combo: string; key: string }
 interface ProbeHit { kind: 'param' | 'input'; name: string; key: string }
 export interface PageScan {
   path: string;
@@ -66,8 +76,24 @@ export interface PageScan {
   consoleErrors: string[];
   failed: string[];
   probes: ProbeHit[];
+  /** The first load's data calls, console warnings and title (desktop, light, as loaded). */
+  calls: CallSummary[];
+  warnings: string[];
+  title?: string;
+  /** The first load's readable texts and the data in its JSON script tags, for the translation check. */
+  texts: PageText[];
+  data: string;
+  /** Three more loads, for speed; empty when speed wasn't asked for. */
+  perf: PagePerf[];
 }
-interface SideScan { pages: PageScan[]; shots: Map<string, Buffer> }
+interface I18n { files: string[]; library?: string; match: (text: string) => boolean }
+export interface SideScan { pages: PageScan[]; shots: Map<string, Buffer>; i18n?: I18n }
+
+/** The checkout's translation files, read once per end. */
+function readI18n(dir: string): I18n {
+  const files = findTranslationFiles(dir);
+  return { files: files.map(f => path.relative(dir, f).replace(/\\/g, '/')), library: translationLibrary(dir), match: translationMatcher(readTranslations(files)) };
+}
 
 async function probe(p: Page, origin: string, pagePath: string): Promise<ProbeHit[]> {
   const hits: ProbeHit[] = [];
@@ -89,8 +115,23 @@ async function probe(p: Page, origin: string, pagePath: string): Promise<ProbeHi
   return hits;
 }
 
-async function scanPage(browser: Browser, origin: string, pagePath: string, o: { probe: boolean; screens: boolean }): Promise<{ scan: PageScan; shots: Map<string, Buffer> }> {
-  const scan: PageScan = { path: pagePath, ok: true, problems: [], exceptions: [], consoleErrors: [], failed: [], probes: [] };
+const SPEED_LOADS = 3;
+
+async function measureSpeed(p: Page, url: string): Promise<PagePerf[]> {
+  await p.viewport(1280, 800, false);
+  await p.scheme('light');
+  const { identifier } = await p.send<{ identifier: string }>('Page.addScriptToEvaluateOnNewDocument', { source: PERF_INIT_SRC });
+  const runs: PagePerf[] = [];
+  try {
+    for (let i = 0; i < SPEED_LOADS; i++) {
+      try { await p.goto(url); runs.push(await p.evaluate<PagePerf>(PERF_READ_SRC)); } catch { /* a load that fails is left out; fewer than two means no comparison */ }
+    }
+  } finally { await p.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => undefined); }
+  return runs;
+}
+
+export async function scanPage(browser: Browser, origin: string, pagePath: string, o: { probe: boolean; screens: boolean; speed: boolean }): Promise<{ scan: PageScan; shots: Map<string, Buffer> }> {
+  const scan: PageScan = { path: pagePath, ok: true, problems: [], exceptions: [], consoleErrors: [], failed: [], probes: [], calls: [], warnings: [], texts: [], data: '', perf: [] };
   const shots = new Map<string, Buffer>();
   const p = await browser.newPage();
   try {
@@ -106,6 +147,12 @@ async function scanPage(browser: Browser, origin: string, pagePath: string, o: {
           scan.exceptions = [...p.events.exceptions];
           scan.consoleErrors = [...p.events.consoleErrors];
           scan.failed = p.events.failed.filter(f => !/favicon/i.test(f.url)).map(f => `${f.status ?? 'failed'} ${f.url.replace(origin, '')} ${f.text}`.trim());
+          scan.calls = callsOf(p.events.requests, origin);
+          scan.warnings = [...p.events.consoleWarnings];
+          scan.title = await p.evaluate<string>('document.title').catch(() => undefined);
+          const read = await p.evaluate<{ texts: PageText[]; data: string }>(TEXTS_SRC).catch(() => null);
+          scan.texts = read?.texts ?? [];
+          scan.data = read?.data ?? '';
           first = false;
         }
         for (const dir of DIRS) {
@@ -121,12 +168,13 @@ async function scanPage(browser: Browser, origin: string, pagePath: string, o: {
         }
       }
     }
+    if (o.speed) scan.perf = await measureSpeed(p, origin + pagePath);
     if (o.probe) scan.probes = await probe(p, origin, pagePath);
   } finally { await p.close(); }
   return { scan, shots };
 }
 
-function detectServe(dir: string): string | null {
+export function detectServe(dir: string): string | null {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as { scripts?: Record<string, string> };
     const has = (f: string): boolean => fs.existsSync(path.join(dir, f));
@@ -150,14 +198,19 @@ function pagesFor(settings: RepoSettings, net: FileDiff[], mode: 'static' | 'dev
   return [...new Set(out)].slice(0, 6);
 }
 
-async function withSide<T>(c: Case, commit: string, label: string, settings: RepoSettings, say: (m: string) => void, fn: (origin: string, mode: 'static' | 'dev', dir: string) => Promise<T>): Promise<T | { error: string }> {
+export async function withSide<T>(c: { repo: string }, commit: string, label: string, settings: RepoSettings, say: (m: string) => void, fn: (origin: string, mode: 'static' | 'dev', dir: string) => Promise<T>): Promise<T | { error: string }> {
   const dir = exportTree(c.repo, commit, label);
   linkDependencies(c.repo, dir);
+  try { return await withDir(dir, `${label} ${commit.slice(0, 7)}`, settings, say, fn); } finally { removeTree(dir); }
+}
+
+/** The project's dev server (or its HTML files, served as they are) from a folder that is already there, and nothing else: the caller removes the folder. */
+export async function withDir<T>(dir: string, where: string, settings: RepoSettings, say: (m: string) => void, fn: (origin: string, mode: 'static' | 'dev', dir: string) => Promise<T>): Promise<T | { error: string }> {
   let served: Served | null = null;
   try {
     const cmd = settings.serve ?? detectServe(dir);
     if (cmd) {
-      say(`Starting the dev server (${cmd}) at ${label} ${commit.slice(0, 7)}…`);
+      say(`Starting the dev server (${cmd}) at ${where}…`);
       const s = await devServer(cmd, dir, 90);
       if ('error' in s) return { error: s.error };
       served = s;
@@ -168,7 +221,6 @@ async function withSide<T>(c: Case, commit: string, label: string, settings: Rep
     return await fn(served.origin, 'static', dir);
   } finally {
     if (served) await served.stop();
-    removeTree(dir);
   }
 }
 
@@ -188,12 +240,13 @@ export async function scanRange(c: Case, opts: LookOptions = {}): Promise<{ repo
   const browser = await Browser.launch(exe);
   const doProbe = opts.probe !== false;
   const screens = opts.screens !== false;
+  const speed = opts.speed !== false;
   const scan = async (origin: string, pages: string[], label: string, withProbe: boolean): Promise<SideScan> => {
     const side: SideScan = { pages: [], shots: new Map() };
     for (const pg of pages) {
       if (left() <= 0) { report.stopped = opts.signal?.aborted ? 'stopped by the person' : 'time budget used up'; break; }
       say(`Looking at ${pg} at the ${label}…`);
-      const r = await scanPage(browser, origin, pg, { probe: withProbe, screens });
+      const r = await scanPage(browser, origin, pg, { probe: withProbe, screens, speed });
       side.pages.push(r.scan);
       for (const [k, v] of r.shots) side.shots.set(`${pg}|${k}`, v);
     }
@@ -201,10 +254,12 @@ export async function scanRange(c: Case, opts: LookOptions = {}): Promise<{ repo
   };
   try {
     let pagesUsed: string[] = [];
-    const headRes = await withSide(c, c.head, 'head', settings, say, async (origin, mode) => {
+    const headRes = await withSide(c, c.head, 'head', settings, say, async (origin, mode, dir) => {
       report.mode = mode;
       pagesUsed = pagesFor({ ...settings, pages: opts.pages?.length ? opts.pages : settings.pages }, net, mode);
-      return scan(origin, pagesUsed, `head ${c.head.slice(0, 7)}`, doProbe);
+      const side = await scan(origin, pagesUsed, `head ${c.head.slice(0, 7)}`, doProbe);
+      side.i18n = readI18n(dir);
+      return side;
     });
     if ('error' in headRes) { report.reason = headRes.error; done(); await browser.close(); return { report, head: null, base: null, net, browser: null }; }
     report.ran = true;
@@ -212,7 +267,7 @@ export async function scanRange(c: Case, opts: LookOptions = {}): Promise<{ repo
     const wantBaseProbe = doProbe && headRes.pages.some(p => p.probes.length > 0);
     let baseRes: SideScan | null = null;
     if (c.base) {
-      const r = await withSide(c, c.base, 'base', settings, say, async origin => scan(origin, pagesUsed, `base ${c.base!.slice(0, 7)}`, wantBaseProbe));
+      const r = await withSide(c, c.base, 'base', settings, say, async (origin, _mode, dir) => { const side = await scan(origin, pagesUsed, `base ${c.base!.slice(0, 7)}`, wantBaseProbe); side.i18n = readI18n(dir); return side; });
       if (!('error' in r)) baseRes = r;
       else report.reason = `The base couldn’t be opened (${r.error.split('\n')[0]}), so only what is wrong by itself can be reported.`;
     }
@@ -237,15 +292,26 @@ const KINDS: Record<string, { title: string; lens: Lens; sev: Severity; ref: str
   blank: { title: 'The page shows nothing', lens: 'Correctness', sev: 'high', ref: 'Measured', maybe: 'Whatever should be there didn’t render.' },
   exception: { title: 'The page throws an uncaught error', lens: 'Correctness', sev: 'high', ref: 'Console', maybe: 'Something on the page is broken for everyone who opens it.' },
   console: { title: 'The page logs an error', lens: 'Correctness', sev: 'medium', ref: 'Console', maybe: 'Something went wrong that the page reported but didn’t stop on.' },
-  network: { title: 'A request from the page fails', lens: 'Correctness', sev: 'medium', ref: 'Network', maybe: 'Part of the page is missing its data.' }
+  network: { title: 'A request from the page fails', lens: 'Correctness', sev: 'medium', ref: 'Network', maybe: 'Part of the page is missing its data.' },
+  // D62: rules and comparisons taken over from a sister tool's per-commit page checks
+  nolang: { title: 'The page has no language', lens: 'UI', sev: 'low', ref: 'WCAG 3.1.1', maybe: 'A screen reader guesses which language to read it in, and may say every word wrong.', skipNew: true },
+  heading: { title: 'Heading levels skip', lens: 'UI', sev: 'low', ref: 'WCAG 1.3.1', maybe: 'People who move by headings think a section is missing.', skipNew: true },
+  tabindex: { title: 'A positive tabindex changes the keyboard order', lens: 'UI', sev: 'low', ref: 'WCAG 2.4.3', maybe: 'People who use a keyboard jump around the page in an order that doesn’t match what they see.', skipNew: true },
+  dupid: { title: 'An id is used more than once', lens: 'UI', sev: 'low', ref: 'Measured', maybe: 'A label or an aria reference points at the first of them, which may be the wrong one.', skipNew: true },
+  warning: { title: 'The page logs a new warning', lens: 'Correctness', sev: 'low', ref: 'Console', maybe: 'The framework or the browser noticed something that may break later.' },
+  calls: { title: 'The page calls the same thing more often', lens: 'Performance', sev: 'low', ref: 'Network', maybe: 'A call made twice is usually a duplicated effect or a missing cache: more load on the server and a slower page.' },
+  slow: { title: 'The page loads clearly slower', lens: 'Performance', sev: 'medium', ref: 'Measured', maybe: 'People wait longer before they see the page. Measured on the dev build, so the size of the change matters more than the numbers.' },
+  heavy: { title: 'The page loads clearly more script', lens: 'Performance', sev: 'low', ref: 'Measured', maybe: 'More to download and run before the page responds, most of all on a phone.' },
+  untranslated: { title: 'Text that isn’t in the translation files', lens: 'UI', sev: 'low', ref: 'Measured', maybe: 'It never reaches a translator, so people who use the app in another language see it in this one.' }
 };
 
 const UI_FILE = /\.(css|scss|sass|less|vue|svelte|html?|tsx|jsx)$/i;
+const SCRIPT_FILE = /\.([cm]?[jt]sx?|vue|svelte)$|(^|\/)package\.json$/i;
 const SINK = /innerHTML|insertAdjacentHTML|dangerouslySetInnerHTML|document\.write|v-html|\{@html/;
 
 /** Where in the diff a rendered problem most likely came from: a changed line that names one of the element's classes or ids, else the changed UI file. */
-function anchorUi(net: FileDiff[], tokens: string[], sink = false): { file: FileDiff; line: number; text: string } | null {
-  const usable = net.filter(f => !f.binary && f.status !== 'deleted' && f.hunks.length > 0).sort((a, b) => Number(UI_FILE.test(b.path)) - Number(UI_FILE.test(a.path)));
+function anchorUi(net: FileDiff[], tokens: string[], sink = false, prefer: RegExp = UI_FILE): { file: FileDiff; line: number; text: string } | null {
+  const usable = net.filter(f => !f.binary && f.status !== 'deleted' && f.hunks.length > 0).sort((a, b) => Number(prefer.test(b.path)) - Number(prefer.test(a.path)));
   if (sink) {
     for (const f of usable) for (const h of f.hunks) for (const l of h.lines) if (l.t === '+' && l.n !== null && SINK.test(l.text)) return { file: f, line: l.n, text: l.text };
   }
@@ -263,14 +329,37 @@ function anchorUi(net: FileDiff[], tokens: string[], sink = false): { file: File
       }
     }
   }
-  const f = usable.find(x => UI_FILE.test(x.path)) ?? usable[0];
+  const f = usable.find(x => prefer.test(x.path)) ?? usable[0];
   const row = f?.hunks.flatMap(h => h.lines).find(l => l.t === '+' && l.n !== null);
   return f && row && row.n !== null ? { file: f, line: row.n, text: row.text } : null;
 }
 
+/** Kinds that are a comparison of the two ends, whose detail already says what it was at the base. */
+/** The texts a head page shows that no translation file has, that the base page didn't already show untranslated, and that a changed line wrote (at most 10). */
+function newUntranslated(hp: PageScan, bp: PageScan, head: I18n | undefined, base: I18n | undefined, net: FileDiff[]): Array<PageText & { at: { file: string; line: number } }> {
+  if (!head?.files.length) return [];
+  // A base with no translation files had every text untranslated: only what is new is the change's.
+  const before = new Set(untranslatedTexts(bp.texts, bp.data, base?.files.length ? base.match : () => false).map(t => t.text));
+  const out: Array<PageText & { at: { file: string; line: number } }> = [];
+  for (const t of untranslatedTexts(hp.texts, hp.data, head.match)) {
+    if (before.has(t.text) || out.length >= 10) continue;
+    const at = addedLineWith(net, t.text);
+    if (at) out.push({ ...t, at });
+  }
+  return out;
+}
+
+const COMPARED = new Set(['calls', 'warning', 'slow', 'heavy', 'untranslated']);
+
+/** A call's path as something a changed line may contain: "/api/orders/" for "GET /api/orders/{id}". anchorUi drops a token's first character. */
+const callTokens = (key: string): string[] => {
+  const p = key.slice(key.indexOf(' ') + 1).split('{')[0];
+  return p.length > 3 ? [`_${p}`] : [];
+};
+
 const slug = (s: string): string => s.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'root';
 
-async function diffShot(browser: Browser, a: Buffer, b: Buffer): Promise<{ ratio: number; box: ShotRecord['box']; diff: string; base: string; head: string } | null> {
+export async function diffShot(browser: Browser, a: Buffer, b: Buffer): Promise<{ ratio: number; box: ShotRecord['box']; diff: string; base: string; head: string } | null> {
   const p = await browser.newPage();
   try {
     return await p.evaluate(`(${DIFF_SRC})(${JSON.stringify(`data:image/png;base64,${a.toString('base64')}`)}, ${JSON.stringify(`data:image/png;base64,${b.toString('base64')}`)})`);
@@ -289,19 +378,20 @@ export async function lookCase(c: Case, opts: LookOptions = {}): Promise<LookRep
     const b7 = c.base ? c.base.slice(0, 7) : 'the start';
     const rec: RunRecord = { id: `r-${sha([c.head, 'browser', report.pages.join(',')].join('\0'), 8)}`, kind: 'browser', at: new Date().toISOString(), secs: report.secs, command: `${report.browser} (${report.mode})`, summary: '', findings: [], signals: [], shots: [] };
     const make = (raw: RawFinding): Finding => buildFinding(raw, { commit: c.head, files: net }, 'run');
-    const push = (kind: string, page: string, items: Array<{ key: string; combo?: string; detail: string; tokens?: string[] }>, newPage: boolean, rtlOnly: boolean, proofKind: 'measurement' | 'probe', arabicOnly = false): void => {
+    const push = (kind: string, page: string, items: Array<{ key: string; combo?: string; detail: string; tokens?: string[]; file?: string }>, newPage: boolean, rtlOnly: boolean, proofKind: 'measurement' | 'probe' | 'behaviour-diff', arabicOnly = false): void => {
       const meta = KINDS[kind];
-      const a = anchorUi(net, items.flatMap(i => i.tokens ?? []), proofKind === 'probe');
+      // A slower or heavier page is most likely the script that changed (or the manifest that brought a package in), not the markup.
+      const a = anchorUi(net, items.flatMap(i => i.tokens ?? []), proofKind === 'probe', items[0]?.file ? new RegExp(`^${items[0].file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) : kind === 'slow' || kind === 'heavy' ? SCRIPT_FILE : UI_FILE);
       if (!a) return;
       const evidence = items.slice(0, 4).map((i, n) => ({
         kind: proofKind, source: `browser:${kind}`,
-        what: `On ${page}${i.combo ? ` (${comboLabel(i.combo)})` : ''} at ${h7}: ${i.detail}${n === 0 ? (newPage ? '.' : `. Not there at ${b7}.`) : '.'}`,
+        what: `On ${page}${i.combo ? ` (${comboLabel(i.combo)})` : ''} at ${h7}: ${i.detail}${n === 0 ? (newPage || COMPARED.has(kind) ? '.' : `. Not there at ${b7}.`) : '.'}`,
         run: { kind: 'look' as const, file: page, op: i.key }
       }));
       rec.findings.push(make({
         check: 'browser', key: `${kind}:${page}`, title: `${proofKind === 'probe' ? 'Text typed into the page becomes markup' : meta.title}${proofKind === 'probe' ? '' : ` on ${page}`}${arabicOnly ? ' with Arabic text' : rtlOnly ? ' when mirrored (right to left)' : ''}`,
         lens: proofKind === 'probe' ? 'Security' : meta.lens, severity: proofKind === 'probe' ? 'high' : meta.sev, file: a.file.path, line: a.line, side: 'added', text: a.text, evidence,
-        observed: [`Measured in a real browser: ${items.length} ${items.length === 1 ? 'case' : 'cases'} on ${page}${newPage ? '' : `, none at ${b7}`}.`, ...items.slice(0, 3).map(i => `${i.combo ? `${comboLabel(i.combo)}: ` : ''}${i.detail}.`)],
+        observed: [`Measured in a real browser: ${items.length} ${items.length === 1 ? 'case' : 'cases'} on ${page}${newPage ? '' : COMPARED.has(kind) ? ` against ${b7}` : `, none at ${b7}`}.`, ...items.slice(0, 3).map(i => `${i.combo ? `${comboLabel(i.combo)}: ` : ''}${i.detail}.`)],
         inferred: [proofKind === 'probe' ? 'Anyone who can get a person to open a crafted link, or to paste text into the field, can run script in their session.' : meta.maybe],
         ref: proofKind === 'probe' ? 'CWE-79' : meta.ref
       }));
@@ -336,8 +426,36 @@ export async function lookCase(c: Case, opts: LookOptions = {}): Promise<LookRep
       const baseProbe = new Set(bp?.probes.map(p => p.key) ?? []);
       const hits = hp.probes.filter(p => !baseProbe.has(p.key));
       if (hits.length) push('probe', hp.path, hits.map(p => ({ key: p.key, detail: p.kind === 'param' ? `opening ?${p.name}=<probe> made the page create an element from it` : `typing the probe into the "${p.name}" field made the page create an element from it` })), newPage, false, 'probe');
+      if (newPage || !bp) continue;
+      // Text no translation file has (D63): new at the head, and written by a changed line, so data and old text are left alone.
+      const fresh18 = newUntranslated(hp, bp, head.i18n, base?.i18n, net);
+      if (fresh18.length) push('untranslated', hp.path, fresh18.map(x => ({ key: `untranslated|${x.text}`, detail: `the page shows "${x.text}" (${whereWords(x.where)}), written at ${x.at.file}:${x.at.line}, and none of the ${head.i18n!.files.length} translation file${head.i18n!.files.length === 1 ? '' : 's'} has it`, tokens: [`_${x.text}`], file: x.at.file })), false, false, 'measurement');
+      // What changed underneath (D62): every change is listed in the report; only the worse ones are findings.
+      const changes = compareCalls(bp, hp);
+      if (changes.length) (report.calls ??= []).push({ page: hp.path, changes });
+      const more = changes.filter(x => x.kind === 'call-count' && x.tone === 'worse');
+      if (more.length) push('calls', hp.path, more.map(x => ({ key: `calls|${x.key}`, detail: x.text, tokens: callTokens(x.key!) })), false, false, 'behaviour-diff');
+      const warned = changes.filter(x => x.kind === 'warning-new');
+      if (warned.length) push('warning', hp.path, warned.map(x => ({ key: `warning|${x.key}`, detail: x.text })), false, false, 'measurement');
+      const hm = medianPerf(hp.perf), bm = medianPerf(bp.perf);
+      if (hm && bm) {
+        const slower = slowerThan(hp.perf, bp.perf);
+        const heavier = heavierThan(hm, bm);
+        (report.speed ??= []).push({ page: hp.path, base: bm, head: hm, ...(slower ? { slower } : {}), ...(heavier ? { heavier } : {}) });
+        if (slower) push('slow', hp.path, [{ key: 'slow|page', detail: `${slower} (the middle of ${hp.perf.length} loads at each end, every load at the head slower than every load at the base)` }], false, false, 'measurement');
+        if (heavier) push('heavy', hp.path, [{ key: 'heavy|page', detail: heavier }], false, false, 'measurement');
+      }
     }
-    report.newProblems = rec.findings.filter(f => f.evidence[0].kind === 'measurement').length;
+    if (head.i18n && (head.i18n.files.length || head.i18n.library)) {
+      const ok = head.pages.filter(x => x.ok);
+      report.translation = {
+        files: head.i18n.files.length, ...(head.i18n.library ? { library: head.i18n.library } : {}),
+        texts: ok.reduce((n, x) => n + x.texts.length, 0),
+        untranslated: head.i18n.files.length ? ok.reduce((n, x) => n + untranslatedTexts(x.texts, x.data, head.i18n!.match).length, 0) : 0,
+        ...(head.i18n.files.length ? {} : { note: `The project uses ${head.i18n.library}, but no translation file was found in a locales, i18n, messages or translations folder, so nothing was compared.` })
+      };
+    }
+    report.newProblems = rec.findings.filter(f => f.evidence[0].kind === 'measurement' || f.evidence[0].kind === 'behaviour-diff').length;
     report.probeHits = rec.findings.filter(f => f.evidence[0].kind === 'probe').length;
 
     if (base && opts.screens !== false) {
@@ -380,9 +498,26 @@ export async function replayLook(c: Case, ev: Evidence): Promise<{ reproduced: b
   const run = ev.replay?.run;
   if (!run || run.kind !== 'look' || !run.file || !run.op) return { reproduced: false, detail: 'This evidence has no page to look at again.' };
   const isProbe = run.op.startsWith('param:') || run.op.startsWith('input:');
-  const { report, head, base, browser } = await scanRange(c, { pages: [run.file], probe: isProbe, screens: false });
+  const kindOf = run.op.slice(0, Math.max(0, run.op.indexOf('|')));
+  const compared = ['calls', 'warning', 'slow', 'heavy', 'untranslated'].includes(kindOf);
+  const { report, head, base, browser } = await scanRange(c, { pages: [run.file], probe: isProbe, screens: false, speed: kindOf === 'slow' || kindOf === 'heavy' });
   try {
     if (!report.ran || !head) return { reproduced: false, detail: report.reason ?? 'The page could not be opened.' };
+    if (compared) {
+      // A comparison (D62) is about both ends at once: it is redone, not looked up on each side.
+      const hp = head.pages.find(p => p.path === run.file && p.ok), bp = base?.pages.find(p => p.path === run.file && p.ok);
+      if (!hp || !bp) return { reproduced: false, detail: `Opened ${run.file} again, but ${hp ? 'the base' : 'the head'} didn’t open, so the two can’t be compared.` };
+      const rest = run.op.slice(run.op.indexOf('|') + 1);
+      const changes = compareCalls(bp, hp);
+      if (kindOf === 'untranslated') {
+        const t = newUntranslated(hp, bp, head.i18n, base?.i18n, commitDiff(c.repo, c.head, c.base)).find(x => x.text === rest);
+        return { reproduced: !!t, detail: t ? `Opened ${run.file} again at both ends: it shows "${t.text}" at the head, written at ${t.at.file}:${t.at.line}, and no translation file has it.` : `Opened ${run.file} again at both ends: the text is translated now, or no longer shown.` };
+      }
+      const again = kindOf === 'calls' ? changes.find(x => x.kind === 'call-count' && x.tone === 'worse' && x.key === rest)?.text
+        : kindOf === 'warning' ? changes.find(x => x.kind === 'warning-new' && x.key === rest)?.text
+          : kindOf === 'slow' ? slowerThan(hp.perf, bp.perf) : heavierThan(medianPerf(hp.perf), medianPerf(bp.perf));
+      return { reproduced: !!again, detail: again ? `Opened ${run.file} again at both ends: ${again}.` : `Opened ${run.file} again at both ends: the difference is gone${kindOf === 'slow' ? ' (speed varies; it counts only when every load at the head is slower)' : ''}.` };
+    }
     const has = (s: SideScan | null): boolean => !!s?.pages.some(p => {
       if (isProbe) return p.probes.some(x => x.key === run.op);
       const sep = run.op!.indexOf('|');

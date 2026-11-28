@@ -10,6 +10,8 @@ export interface CommitCtx {
   subject: string;
   files: FileDiff[];
   read(file: string, rev: 'commit' | 'parent'): string | null;
+  /** Project mode (D60): every tracked file is handed over whole, as if added, so a check words what it finds as "is in", not "was added". */
+  whole?: boolean;
 }
 
 /** What a check returns. It never sets a tier or an id: the engine does (D3). */

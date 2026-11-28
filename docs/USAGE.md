@@ -28,6 +28,8 @@ Merge commits are left out, because their diff is a combined one (the report say
 |---|---|
 | `assay case [range]` | Runs the free checks over the range and prints the verdict and the ranked findings. Reads git only, uses no tokens. Saves the case. |
 | `assay timeline` | One row per recent commit: files, lines, findings by tier, risk. Instant for commits seen before. |
+| `assay checkup` | The project as it is, not a change: what is wrong in the committed files now, each marked new or already there since the last checkup, and the pages, endpoints and flows the project describes. Reads git only, runs nothing. Flags: `--url`, `--pages`, `--har`, `--flow`, `--openapi`, `--ref`, `--fail-on new\|any`, `--no-save`, `--json`, `--all`. `assay checkup list` shows the ones kept. [Project mode](PROJECT-MODE.md) |
+| `assay secrets` | Only the secrets check of a checkup: keys, key files and `.env` files committed in tracked files |
 | `assay show <finding>` | One finding in full: the changed lines (the marked line is the one it is about), what was observed against what is only inferred, why it ranks where it does, each piece of evidence and how to replay it. |
 | `assay brief [range]` | The short list an agent should work from: must fix, should fix, ask the person. Hints are left out. About 200 tokens. |
 | `assay report [range]` | Writes a one-file HTML case file (fonts embedded, nothing to host). |
@@ -56,8 +58,12 @@ A finding can be written with or without its `f-` prefix (`f-1a2b3c4d` or `1a2b3
 | Command | What it does |
 |---|---|
 | `assay allow-run` | Your opt-in for this repository. Prints what Assay found (test command, dev server, pages, browser) and what it will do. Settings are kept in `~/.assay/repos.json`. |
+| `assay try <package>[@version]` | Installs a new version of one dependency in a throwaway copy and says what breaks or changes: the type check, the build, the tests and the pages, before and after, in two copies of a commit. A tag (`next`) or a partial version (`19`) is resolved by the package manager. Flags: `--ref`, `--pages`, `--no-pages`, `--no-tests`, `--scripts` (let install scripts run), `--fail-on breaks\|changes`, `--json`. Needs `assay allow-run` **and** `assay allow-run --network`. [Project mode](PROJECT-MODE.md#try-an-upgrade-assay-try) |
+| `assay gremlins [--url <address> \| --ref <commit> [--base <commit>]]` | A headless browser clicks and types nonsense through your app, seeded, and reports each problem with the steps that led to it. `--url` goes through an app that is already running; with a commit, Assay starts your dev server in a clean copy, and with `--base` runs the same seed at both and reports only what is new. Flags: `--actions`, `--seed`, `--page`, `--phone`, `--bold`, `--no-save`, `--fail-on high\|medium\|low`, `--json`, `--all`. A session for a signed-in app goes in `ASSAY_SESSION_COOKIE` / `ASSAY_SESSION_AUTHORIZATION` (with `--url` only). Each run is kept and compared with the last: `assay gremlins list`, `show [<run>]`, and `replay <run> [--finding g-…] [--url …]` does the recorded steps again exactly. Needs `assay allow-run` **and** `assay allow-run --writes`. [Project mode](PROJECT-MODE.md#gremlins-assay-gremlins) |
+| `assay attack --url <address>` | A security pass on your running app (on this computer only): headers, cookies, CORS, script in the address, stack traces and SQL errors; with a session in `ASSAY_SESSION_COOKIE`, calls that answer without it and other ids; with `--writes`, also saved script, CSRF, wrong passwords and broken bodies. Flags: `--pages`, `--har`, `--openapi`, `--ref`, `--no-browser`, `--fail-on high\|medium\|low`, `--json`, `--all`. Needs `assay allow-run`; `--writes` also needs `assay allow-run --writes`. [Project mode](PROJECT-MODE.md#attack-my-app-assay-attack) |
+| `assay test` | Runs the project's own tests once, at one commit (HEAD by default) in a clean copy, and reads the runner's own report: how many passed, and each failure with its file, line, message, expected and actual (vitest, jest, node:test, pytest and go in full; other runners from what they print). `--coverage` adds the share of lines the tests ran and the least covered files. Exit code 1 when a test fails. [Below](#assay-test) |
 | `assay prove [range]` | Runs the project's own tests at the base and at the head. A regression is proven, and traced to the first commit where the tests fail. If the head is green, it also reverts risky hunks and mutates the changed lines. |
-| `assay look [range]` | Opens the pages in a real browser at the base and at the head and reports what is new at the head. |
+| `assay look [range]` | Opens the pages in a real browser at the base and at the head and reports what is new at the head: layout, contrast, accessibility, errors, failed requests, a slower or heavier page, a call made more often, a new warning, text a changed line wrote that no translation file has. It also lists what changed underneath (calls, warnings, title). |
 
 `allow-run` options:
 
@@ -68,9 +74,28 @@ A finding can be written with or without its `f-` prefix (`f-1a2b3c4d` or `1a2b3
 | `--serve "<cmd>"` | The command that starts the dev server for `look`. `{port}` is replaced and `PORT` is set. Without it: `dev` or `start` from `package.json`, else the HTML files are served as they are. |
 | `--pages "/,/cart"` | Paths to open (default: the HTML files the range changed, or `/` for a dev server) |
 | `--browser <path>` | A Chromium-based browser, if Assay can't find one (also `ASSAY_BROWSER`) |
-| `--off` | Turn it off again |
+| `--here` | Also let `assay test --here` run the tests in this folder, uncommitted work included (without it, `assay test` only runs in a clean copy) |
+| `--writes` | Also let `assay attack --writes` send requests that change data (without it, `assay attack` only reads), and let `assay gremlins` click and type (without it, gremlins won't run) |
+| `--network` | Also let `assay try` make the package manager reach its registry, to look up and install a version in a throwaway copy (without it, `assay try` won't run) |
+| `--off` | Turn it off again (`--here`, `--writes` and `--network` too) |
 
 Running `allow-run` again changes only what you pass; the rest stays.
+
+<a id="assay-test"></a>`test` options:
+
+| Option | |
+|---|---|
+| `--match "<name>"` | Only tests whose name matches (vitest and jest `--testNamePattern`, pytest `-k`, go `-run`, node `--test-name-pattern`) |
+| `--files "a.test.js,b.test.js"` | Only these test files (vitest, jest, pytest) or packages (go), relative to the repository |
+| `--coverage` | Also measure how much of the code the tests run: vitest (with `@vitest/coverage-v8` or `-istanbul` installed), jest, node:test (V8's own coverage, nothing to install), pytest (with `pytest-cov`), go. Where it can't, it says what to install. |
+| `--ref <commit>` | Test another commit (default HEAD) |
+| `--here` | Run in your own folder, uncommitted work included. Needs `assay allow-run --here`. |
+| `--changed` | With `--here`: only the tests for uncommitted changes (vitest `--changed`, jest `--onlyChanged`) |
+| `--timeout <seconds>` | Stop the run after this long (default: the `allow-run` setting, 300) |
+| `--json` | The report as JSON, `"schema": "assay.test/1"` (fields are only added within a version) |
+| `--all` | Every failure in full |
+
+A name filter or a file is an argument, never a command: vitest, jest, pytest and go are started without a shell, and a filter or file that starts with `-`, a file outside the repository, or one with `..` is refused. A command you typed with `allow-run --command` runs as typed and is read from its output; a filter, a file list or coverage can't be applied to it, and it says so.
 
 `prove` options:
 
@@ -92,6 +117,7 @@ Running `allow-run` again changes only what you pass; the rest stays.
 | `--pages "/,/cart"` | Open these paths for this run |
 | `--no-probe` | Don't type the probe marker into fields and query strings |
 | `--no-screens` | Don't keep before/after pictures |
+| `--no-speed` | Don't load each page three more times at each end to compare how fast it is |
 | `--budget <seconds>` | Stop opening new pages after this long (default 300) |
 | `--fail-on …` | As above |
 
@@ -164,8 +190,8 @@ What Assay remembers about this project. The [memory guide](MEMORY.md) explains 
 | Code | Meaning |
 |---|---|
 | 0 | Done |
-| 1 | An error (a bad range, not a git repository, proof not allowed, no browser, …), or `replay` did not reproduce |
-| 2 | `--fail-on` tripped |
+| 1 | An error (a bad range, not a git repository, proof not allowed, no browser, …), `replay` did not reproduce, `assay test` had a failing test |
+| 2 | `--fail-on` tripped (for a case `blocked` or `mergeable`; for a checkup `new` or `any`; for an attack or gremlins `high`, `medium` or `low`) |
 
 Errors are one line: `error: …`. Set `ASSAY_DEBUG=1` for the stack.
 
@@ -175,6 +201,7 @@ Errors are one line: `error: …`. Set `ASSAY_DEBUG=1` for the stack.
 |---|---|
 | `ASSAY_HOME` | Where Assay keeps its state (default `~/.assay`) |
 | `ASSAY_BROWSER` | Path to a Chromium-based browser, if Assay doesn't find yours (it looks for Chrome, Edge, Brave and Chromium where each system puts them) |
+| `CHROME_PATH` | The same, read after `ASSAY_BROWSER` (other tools set it too) |
 | `NO_COLOR` | No colour in the output |
 | `ASSAY_DEBUG` | Print stack traces |
 

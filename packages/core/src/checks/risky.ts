@@ -106,10 +106,44 @@ function lineRules(f: { path: string; hunks: Array<{ lines: Array<{ t: string; n
 const GUARD = /^\s*(?:if|elif|else if|unless|guard)\b/;
 const EXIT = /\b(?:raise|throw|return|abort|panic|exit|continue|break)\b/;
 const ASSERT = /\b(?:expect|assert\w*|should|verify|XCTAssert\w*)\b\s*[.(]|\bt\.(?:Error|Fatal)f?\(|\brequire\.\w+\(/;
-const ADDED_CHECK = /\b(?:if|raise|throw|guard|assert\w*|unless|panic)\b/;
+/** A check in the added lines: a keyword, or a call to a helper named like one (`checkKey(key)`, `validateInput(x)`, `requireAuth()`): the check moved, it did not go. */
+const ADDED_CHECK = /\b(?:if|raise|throw|guard|assert\w*|unless|panic)\b|\b(?:check|validate|verify|ensure|require|sanitize|sanitise|authori[sz]e)[A-Z_]\w*\s*\(|\b(?:check|validate|verify|ensure)\s*\(/;
+/** `if (kind === "a")`, alone or chained with `||`: a branch on a value, not a check that turns something away. Removing it removes a case. */
+const EQ = String.raw`[\w.$?\[\]]+\s*===?\s*(?:"[^"]*"|'[^']*'|[\w.]+)`;
+const BRANCH_ON_VALUE = new RegExp(String.raw`^\s*(?:\}\s*)?(?:else\s+)?(?:if|elif)\s*\(?\s*${EQ}(?:\s*\|\|\s*${EQ})*\s*\)?\s*(?:\{.*|:.*|return\b.*)?$`);
+const REFUSES = /\b(?:raise|throw|abort|panic|exit)\b/;
+
+interface HunkLine { t: string; o: number | null; n: number | null; text: string }
+const indentOf = (s: string): number => (/^[ \t]*/.exec(s) as RegExpExecArray)[0].replace(/\t/g, '    ').length;
+const blankLine = (s: string): boolean => s.trim() === '';
+
+/**
+ * True when the removed guard went away together with the block it was in: the line that opened the block was removed too, and nothing inside it was kept.
+ * Deleting or moving a whole function is not weakening a check. A signature that was only rewritten keeps the rest of the body as context lines, so it still counts,
+ * and so does a guard whose block is not in view (nothing here says it went too).
+ */
+function goneWithItsBlock(lines: HunkLine[], at: number): boolean {
+  const n = indentOf(lines[at].text);
+  if (n === 0) return false;
+  let o = -1;
+  for (let k = at - 1; k >= 0; k--) {
+    const l = lines[k];
+    if (l.t === '+' || blankLine(l.text)) continue;
+    if (indentOf(l.text) < n) { o = k; break; }
+  }
+  if (o === -1 || lines[o].t !== '-') return false;
+  const top = indentOf(lines[o].text);
+  for (let k = o + 1; k < lines.length; k++) {
+    const l = lines[k];
+    if (l.t === '+' || blankLine(l.text)) continue;
+    if (indentOf(l.text) <= top) break;
+    if (l.t !== '-') return false;
+  }
+  return true;
+}
 
 /** Rules that need the whole hunk: a guard that disappeared, an assertion that disappeared. */
-function hunkRules(f: { path: string; status: string; hunks: Array<{ lines: Array<{ t: string; o: number | null; n: number | null; text: string }> }> }): RawFinding[] {
+function hunkRules(f: { path: string; status: string; hunks: Array<{ lines: HunkLine[] }> }): RawFinding[] {
   const lang = languageOf(f.path);
   if (!lang || f.status === 'deleted') return [];
   const test = isTestPath(f.path);
@@ -119,7 +153,9 @@ function hunkRules(f: { path: string; status: string; hunks: Array<{ lines: Arra
     const added = h.lines.filter(l => l.t === '+');
     if (!removed.length) continue;
     if (!test && CODE.includes(lang)) {
-      const i = removed.findIndex((l, k) => GUARD.test(l.text) && removed.slice(k, k + 4).some(x => EXIT.test(x.text)));
+      const i = removed.findIndex((l, k) => GUARD.test(l.text) && removed.slice(k, k + 4).some(x => EXIT.test(x.text))
+        && !(BRANCH_ON_VALUE.test(l.text) && !removed.slice(k, k + 4).some(x => REFUSES.test(x.text)))
+        && !goneWithItsBlock(h.lines, h.lines.indexOf(l)));
       if (i !== -1 && !added.some(l => ADDED_CHECK.test(l.text))) {
         const g = removed[i];
         out.push({

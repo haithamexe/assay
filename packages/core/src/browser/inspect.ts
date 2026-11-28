@@ -3,7 +3,7 @@
  * because the core has no DOM types and no dependencies. No backticks and no dollar-brace in here.
  */
 export interface InPageProblem {
-  kind: 'hscroll' | 'clip' | 'overlap' | 'contrast' | 'noalt' | 'noname' | 'nolabel' | 'blank';
+  kind: 'hscroll' | 'clip' | 'overlap' | 'contrast' | 'noalt' | 'noname' | 'nolabel' | 'nolang' | 'heading' | 'tabindex' | 'dupid' | 'blank';
   path: string;
   detail: string;
   /** Class and id names of the elements involved, to find the rule or the markup that made them. */
@@ -139,6 +139,31 @@ export const INSPECT_SRC = String.raw`(function () {
     if (added < 5 && !has && r.width > 1 && r.height > 1) { added++; problems.push({ kind: 'nolabel', path: cssPath(el), detail: 'a form field has no label', tokens: tokens(el), box: box(r) }); }
   });
 
+  // From a sister tool's audit (D62): the page's language, the heading order, the keyboard order and ids used twice.
+  if (!document.documentElement.getAttribute('lang')) problems.push({ kind: 'nolang', path: 'html', detail: 'the page has no language (<html lang>), so a screen reader guesses how to say it', tokens: [] });
+  added = 0;
+  var last = 0;
+  Array.prototype.forEach.call(document.querySelectorAll('h1, h2, h3, h4, h5, h6'), function (h) {
+    var r = h.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    var n = Number(h.tagName.charAt(1));
+    if (added < 5 && last && n > last + 1) { added++; problems.push({ kind: 'heading', path: cssPath(h), detail: 'the heading levels skip from h' + last + ' to h' + n + ' at "' + snippet(h) + '"', tokens: tokens(h), box: box(r) }); }
+    last = n;
+  });
+  added = 0;
+  Array.prototype.forEach.call(document.querySelectorAll('[tabindex]'), function (el) {
+    var t = Number(el.getAttribute('tabindex'));
+    var r = el.getBoundingClientRect();
+    if (added < 5 && t > 0 && r.width > 0 && r.height > 0) { added++; problems.push({ kind: 'tabindex', path: cssPath(el), detail: 'tabindex="' + t + '" changes the order the keyboard moves in', tokens: tokens(el), box: box(r) }); }
+  });
+  var ids = {};
+  var firstWith = {};
+  Array.prototype.forEach.call(document.querySelectorAll('[id]'), function (el) { if (!el.id) return; ids[el.id] = (ids[el.id] || 0) + 1; if (!firstWith[el.id]) firstWith[el.id] = el; });
+  added = 0;
+  Object.keys(ids).forEach(function (id) {
+    if (added < 5 && ids[id] > 1) { added++; problems.push({ kind: 'dupid', path: '#' + id.slice(0, 60), detail: 'the id "' + id.slice(0, 40) + '" is used ' + ids[id] + ' times, so a label or an aria reference finds only the first', tokens: tokens(firstWith[id]) }); }
+  });
+
   var text = document.body ? document.body.innerText.trim().length : 0;
   if (document.body && text === 0 && !document.querySelector('img, canvas, svg, video, iframe')) {
     problems.push({ kind: 'blank', path: 'body', detail: 'the page shows nothing: no text and no image', tokens: [] });
@@ -238,4 +263,38 @@ export const ARABIC_RESTORE_SRC = String.raw`(function () {
   var d = document.documentElement;
   if (window.__assayDir === null) d.removeAttribute('dir'); else d.setAttribute('dir', window.__assayDir);
   if (window.__assayLang === null) d.removeAttribute('lang'); else d.setAttribute('lang', window.__assayLang);
+})()`;
+
+/** How fast a page loaded, from the browser's own timings, and how much script it fetched (D62). */
+export interface PagePerf {
+  /** From the start of navigation to the end of the load event. */
+  loadMs?: number;
+  /** Largest contentful paint. */
+  lcpMs?: number;
+  /** Total blocking time: each long task's time over 50 ms, added up. */
+  tbtMs?: number;
+  /** Cumulative layout shift. */
+  cls?: number;
+  /** Script fetched, in bytes as sent (a dev build: compare it with the other end, never with production). */
+  jsBytes?: number;
+  requests?: number;
+}
+
+/** Runs before the page's own scripts: keeps what the browser reports about the largest paint, long tasks and layout shifts. */
+export const PERF_INIT_SRC = String.raw`(function () {
+  var p = (window.__assayPerf = { lcp: 0, tbt: 0, cls: 0 });
+  try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { p.lcp = Math.max(p.lcp, e.startTime); }); }).observe({ type: 'largest-contentful-paint', buffered: true }); } catch (e) {}
+  try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { p.tbt += Math.max(0, e.duration - 50); }); }).observe({ type: 'longtask', buffered: true }); } catch (e) {}
+  try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { if (!e.hadRecentInput) p.cls += e.value; }); }).observe({ type: 'layout-shift', buffered: true }); } catch (e) {}
+})()`;
+
+/** After the page settled: its timings, and the script it fetched. */
+export const PERF_READ_SRC = String.raw`(function () {
+  var n = performance.getEntriesByType('navigation')[0];
+  var p = window.__assayPerf || {};
+  var r = function (x) { return x > 0 ? Math.round(x) : undefined; };
+  var res = performance.getEntriesByType('resource');
+  var js = 0;
+  res.forEach(function (e) { if (e.initiatorType === 'script' || /\.(m?js|jsx|tsx?|vue|svelte)(\?|$)/.test(e.name)) js += e.encodedBodySize || e.transferSize || 0; });
+  return { loadMs: n ? r(n.loadEventEnd || n.duration) : undefined, lcpMs: r(p.lcp), tbtMs: Math.round(p.tbt || 0), cls: Math.round((p.cls || 0) * 1000) / 1000, jsBytes: js || undefined, requests: res.length + 1 };
 })()`;

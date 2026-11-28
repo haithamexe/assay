@@ -29,12 +29,12 @@ One test file: `node --test packages/core/dist/__tests__/tier.test.js` (after a 
 
 ## The layout
 
-See [Architecture](docs/ARCHITECTURE.md). In short: `packages/core` is the engine (no runtime dependencies), `packages/cli` and `packages/mcp` are thin front ends over it.
+See [Architecture](docs/ARCHITECTURE.md). In short: `packages/core` is the engine (its one runtime dependency is plainkit, our own zero-dependency kit), `packages/cli` and `packages/mcp` are thin front ends over it.
 
 ## Conventions
 
 - **Node 22+, ESM, `module: NodeNext`.** Relative imports end in `.js`, even in `.ts` files.
-- **`core` has no runtime dependencies.** Only `node:` modules. `mcp` uses `@modelcontextprotocol/sdk` and `zod`. Nothing else is added without a reason.
+- **`core` has one runtime dependency: plainkit**, our own kit with no dependencies (D58). Everything else is `node:` modules; use Assay's wrappers (`assayPath`, `writeFileAtomic`, `findBrowser`, `Browser.launch`) rather than the kit directly. `mcp` uses `@modelcontextprotocol/sdk` and `zod`. Nothing else is added without a reason.
 - **git is read through `execFile` with argument arrays**, never a shell. A ref or a path from outside is validated before it reaches git (`resolveRev`).
 - **Only `packages/core/src/proof/` and `browser/` run the project's code**, and only after `assay allow-run`. Everything else reads git and nothing more: no tests, no build, no network.
 - **A tier is computed by `tierOf`, never set by hand.** A check returns evidence; it never returns a tier or an id.

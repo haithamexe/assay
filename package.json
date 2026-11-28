@@ -15,7 +15,7 @@
     "build": "tsc -b packages/core packages/cli packages/mcp packages/web",
     "watch": "tsc -b -w packages/core packages/cli packages/mcp packages/web",
     "clean": "tsc -b --clean packages/core packages/cli packages/mcp packages/web",
-    "test": "npm run build && node --test \"packages/core/dist/__tests__/*.test.js\" \"packages/cli/dist/__tests__/*.test.js\" \"packages/mcp/dist/__tests__/*.test.js\" \"packages/web/dist/__tests__/*.test.js\"",
+    "test": "npm run build && node node_modules/@haithamexe/plainkit/dist/bin/temp-run.js --name assay-test node --test \"packages/core/dist/__tests__/*.test.js\" \"packages/cli/dist/__tests__/*.test.js\" \"packages/mcp/dist/__tests__/*.test.js\" \"packages/web/dist/__tests__/*.test.js\"",
     "demo": "node demo/build.mjs",
     "samples": "npm run build && node scripts/samples.mjs",
     "screenshots": "node scripts/screenshots.mjs",

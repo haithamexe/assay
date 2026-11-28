@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -132,9 +132,32 @@ test('prove runs the project’s tests at base and head and blocks on the regres
   assert.equal(execFileSync('git', ['-C', proj, 'status', '--porcelain'], { encoding: 'utf8' }).trim(), '', 'the repository was only read');
 });
 
+test('test runs the tests once in a clean copy, with each failure, as text and JSON; --here needs its own yes', () => {
+  const r = runProj('test');
+  assert.equal(r.code, 1, 'failing tests exit 1');
+  assert.match(r.out, /Tests\s+failed\s+0 passed · 1 failed/);
+  assert.match(r.out, /a clean copy of [0-9a-f]{7}/);
+  assert.match(r.out, /✗ add adds two numbers\s+test\/add\.test\.js:4/);
+  assert.match(r.out, /expected 5\s+actual -1/);
+  const j = JSON.parse(runProj('test', '--json', '--coverage').out) as { schema: string; framework: string; failed: number; coverage?: { files: { file: string }[] } };
+  assert.deepEqual([j.schema, j.framework, j.failed], ['assay.test/1', 'node', 1]);
+  assert.ok(j.coverage?.files.some(f => f.file === 'src/add.js'), JSON.stringify(j.coverage));
+  const refused = runProj('test', '--here');
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /assay allow-run --here/);
+  assert.match(runProj('allow-run', '--here').out, /Your folder\s+assay test --here may run/);
+  fs.writeFileSync(path.join(proj, 'src', 'add.js'), 'export const add = (a, b) => a + b;\n');
+  const here = runProj('test', '--here');
+  assert.equal(here.code, 0, here.out + here.err);
+  assert.match(here.out, /your folder, 1 uncommitted file included/);
+  execFileSync('git', ['-C', proj, 'checkout', '--', 'src/add.js']);
+  assert.match(runProj('test', '--match', '--config=x').err, /can’t start with "-"/);
+});
+
 test('allow-run --off turns it off again', () => {
   assert.equal(runProj('allow-run', '--off').code, 0);
   assert.equal(runProj('prove', `${baseSha}..HEAD`).code, 1);
+  assert.match(runProj('test', '--here').err, /assay allow-run/, '--off takes --here away too');
 });
 
 /* ---- the browser: a static page whose head breaks the mirrored layout ---- */
@@ -370,4 +393,123 @@ test('calibrate history: what would be replayed, a replay scored on the spot, th
   assert.match(runHist('calibrate', 'history', 'score').err, /no replay yet/);
   assert.match(runHist('calibrate', 'history', 'sideways').err, /Unknown history command/);
   assert.equal(execFileSync('git', ['-C', hist, 'status', '--porcelain'], { encoding: 'utf8' }).trim(), '', 'the repository was only read');
+});
+
+test('checkup: the project as it is, as text and as JSON, with exit codes for a build and nothing secret printed', () => {
+  const first = run('checkup', '--no-save', '--fail-on', 'new');
+  assert.equal(first.code, 2, 'a first checkup with a proven key fails on new');
+  assert.match(first.out, /First checkup, so nothing to compare with/);
+  assert.match(first.out, /AWS access key id in settings\.py/);
+  assert.match(first.out, /What later checks will use/);
+  assert.ok(!first.out.includes('QWERTYUIOP123456'));
+  const saved = run('checkup', '--json');
+  assert.equal(saved.code, 0, saved.err);
+  const c = JSON.parse(saved.out) as { schema: string; id: string; findings: Array<{ key: string; since: string; title: string }>; summary: { tone: string }; inventory: unknown };
+  assert.equal(c.schema, 'assay.checkup/1');
+  assert.equal(c.summary.tone, 'act');
+  assert.ok(c.inventory);
+  assert.ok(!saved.out.includes('QWERTYUIOP123456'));
+  assert.equal(run('checkup', '--fail-on', 'new').code, 0, 'nothing new since the saved checkup');
+  assert.equal(run('checkup', '--fail-on', 'any').code, 2);
+  assert.match(run('checkup', '--fail-on', 'blocked').err, /new or any/);
+  const shown = run('show', c.findings[0].key);
+  assert.equal(shown.code, 0, shown.err);
+  assert.match(shown.out, /assay checkup --ref [0-9a-f]{7}/);
+  assert.match(run('checkup', 'list').out, new RegExp(c.id));
+  const only = run('secrets');
+  assert.match(only.out, /AWS access key id in settings\.py/);
+  assert.ok(!only.out.includes('What later checks will use'), 'secrets is that one check, with no list of pages');
+  const bad = run('checkup', '--url', 'https://example.com');
+  assert.equal(bad.code, 1);
+  assert.match(bad.err, /running on this computer/);
+});
+
+test('attack: needs an address, is refused until allowed (and its data-changing checks until their own yes), and says when nothing answers', () => {
+  assert.match(run('attack').err, /Which app\? assay attack --url/);
+  assert.match(run('attack', '--url', 'http://localhost:3000').err, /assay allow-run/, 'refused until a person allows it');
+  assert.match(run('allow-run').out, /Data-changing\s+assay attack only reads/);
+  assert.match(run('attack', '--url', 'http://example.com').err, /running on this computer/);
+  assert.match(run('attack', '--url', 'http://localhost:3000', '--fail-on', 'critical').err, /high, medium or low/);
+  const refused = run('attack', '--url', 'http://127.0.0.1:1', '--writes');
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /assay allow-run --writes/);
+  const j = JSON.parse(run('attack', '--url', 'http://127.0.0.1:1', '--json', '--no-browser').out) as { schema: string; writes: boolean; findings: unknown[]; skipped: string[] };
+  assert.deepEqual([j.schema, j.writes, j.findings.length], ['assay.attack/1', false, 0]);
+  assert.ok(j.skipped.some(s => /Nothing answered/.test(s)));
+  assert.match(run('allow-run', '--writes').out, /Data-changing\s+assay attack --writes and assay gremlins may send requests/);
+  const text = run('attack', '--url', 'http://127.0.0.1:1', '--writes', '--no-browser');
+  assert.equal(text.code, 0, text.err);
+  assert.match(text.out, /Attack\s+http:\/\/127\.0\.0\.1:1\s+nothing proven/);
+  assert.match(text.out, /reads and writes/);
+  assert.equal(run('allow-run', '--off').code, 0);
+  assert.match(run('attack', '--url', 'http://127.0.0.1:1', '--writes').err, /assay allow-run/, '--off takes --writes away with the rest');
+});
+
+test('try: needs a package, is refused until allowed and until the registry has its own yes, and checks what it is given before reaching for it', () => {
+  assert.match(run('try').err, /Which package\? assay try react/);
+  assert.match(run('try', 'react').err, /assay allow-run/, 'refused until a person allows it');
+  assert.equal(run('allow-run').code, 0);
+  assert.match(run('allow-run').out, /Registry\s+assay try won’t run/);
+  assert.match(run('try', 'react').err, /assay allow-run --network/, 'the package manager reaching its registry is a yes of its own');
+  assert.match(run('allow-run', '--network').out, /Registry\s+assay try may let the package manager reach its registry/);
+  assert.match(run('try', 'react', '--fail-on', 'never').err, /breaks or changes/);
+  assert.match(run('try', 'react; ls').err, /isn’t a package name/);
+  assert.match(run('try', 'react').err, /isn’t one of the project’s dependencies|no package\.json/, 'a package the project does not have is said before anything is installed');
+  assert.match(run('try', 'react@^19').err, /number like 19/);
+  assert.equal(run('allow-run', '--off').code, 0);
+  assert.match(run('try', 'react').err, /assay allow-run/, '--off takes it away with the rest');
+});
+
+test('gremlins: refused until allowed and until their own yes, checks its arguments, and goes through a running app with a seed', async (t) => {
+  const refused = run('gremlins', '--url', 'http://localhost:3000');
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /assay allow-run/);
+  assert.equal(run('allow-run').code, 0);
+  assert.match(run('gremlins', '--url', 'http://localhost:3000').err, /assay allow-run --writes/, 'clicking and typing can change data');
+  assert.equal(run('allow-run', '--writes').code, 0);
+  assert.match(run('gremlins', '--url', 'http://example.com').err, /running on this computer/);
+  assert.match(run('gremlins', '--url', 'http://localhost:3000', '--fail-on', 'critical').err, /high, medium or low/);
+  assert.match(run('gremlins', '--url', 'http://localhost:3000', '--seed', 'abc').err, /--seed is a number/);
+  assert.match(run('gremlins', 'now').err, /takes list, show or replay, not "now"/);
+  assert.match(run('gremlins', '--url', 'http://localhost:3000', '--base', 'HEAD').err, /one or the other/);
+  // a real run against an app in another process (the CLI waits for it, so it can't live in this one)
+  const exe = (await import('@assay/core')).findBrowser();
+  if (!exe) { t.diagnostic('no Chromium-based browser on this computer: the real run is skipped'); return; }
+  const app = spawn(process.execPath, ['-e', `const h=require('http');const s=h.createServer((q,r)=>{r.writeHead(200,{'content-type':'text/html'});r.end('<!doctype html><html lang="en"><body><button id="go" onclick="throw new Error(\\'boom from a click\\')">Go</button></body></html>')});s.listen(0,'127.0.0.1',()=>console.log(s.address().port));`], { stdio: ['ignore', 'pipe', 'ignore'] });
+  try {
+    const port = await new Promise<number>(res => app.stdout!.once('data', d => res(Number(String(d).trim()))));
+    const done = await new Promise<{ code: number | null; out: string; err: string }>(res => {
+      const p = spawn(process.execPath, [bin, 'gremlins', '--url', `http://127.0.0.1:${port}`, '--actions', '6', '--seed', '5', '--json', '--fail-on', 'high', '--repo', dir], { env: { ...env, ASSAY_BROWSER: exe } });
+      let o = '', e = '';
+      p.stdout.on('data', d => (o += d)); p.stderr.on('data', d => (e += d));
+      p.on('close', code => res({ code, out: o, err: e }));
+    });
+    assert.equal(done.code, 2, done.err);
+    const j = JSON.parse(done.out) as { schema: string; seed: number; mode: string; findings: Array<{ kind: string; text: string; tier: string }>; replay: string };
+    assert.deepEqual([j.schema, j.seed, j.mode], ['assay.gremlins/1', 5, 'running']);
+    assert.ok(j.findings.some(f => f.kind === 'exception' && /boom from a click/.test(f.text) && f.tier === 'proven'), JSON.stringify(j.findings));
+    assert.match(j.replay, /--seed 5 --actions 6/);
+    // the run is kept, can be listed and shown, and its recorded steps can be done again
+    const id = (JSON.parse(done.out) as { id: string }).id;
+    assert.match(run('gremlins', 'list').out, new RegExp(`${id}.*seed 5.*found`));
+    assert.match(run('gremlins', 'show', id).out, /boom from a click/);
+    assert.match(run('gremlins', 'show', 'gr-nothing').err, /no kept run/);
+    const spawnRun = (args: string[], extra: Record<string, string> = {}): Promise<{ code: number | null; out: string; err: string }> => new Promise(res => {
+      const p = spawn(process.execPath, [bin, ...args, '--repo', dir], { env: { ...env, ASSAY_BROWSER: exe, ...extra } });
+      let o = '', e = '';
+      p.stdout.on('data', d => (o += d)); p.stderr.on('data', d => (e += d));
+      p.on('close', code => res({ code, out: o, err: e }));
+    });
+    const replayed = await spawnRun(['gremlins', 'replay', id, '--url', `http://127.0.0.1:${port}`]);
+    assert.equal(replayed.code, 2, replayed.err);
+    assert.match(replayed.out, /the problem came back/);
+    assert.match((await spawnRun(['gremlins', 'replay'])).err, /Which run\?/);
+    // signed in: the session comes from the environment, and is in no output
+    const signed = await spawnRun(['gremlins', '--url', `http://127.0.0.1:${port}`, '--actions', '3', '--seed', '5', '--json', '--no-save'], { ASSAY_SESSION_COOKIE: 'sid=hunter2-session', ASSAY_SESSION_AUTHORIZATION: 'Bearer hunter2-token' });
+    assert.equal(JSON.parse(signed.out).signedIn, true);
+    assert.ok(!signed.out.includes('hunter2') && !signed.err.includes('hunter2'), 'the session is in no output');
+    assert.match(run('gremlins', 'list').out, new RegExp(id));
+  } finally { app.kill(); }
+  assert.equal(run('allow-run', '--off').code, 0);
+  assert.match(run('gremlins', '--url', 'http://127.0.0.1:1').err, /assay allow-run/, '--off takes it all away');
 });

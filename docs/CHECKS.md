@@ -12,11 +12,11 @@ Added lines are scanned. A secret is **never printed**: it is masked in findings
 
 | Pattern | Tier it gives |
 |---|---|
-| AWS access key id, GitHub token, Slack token, Google API key, Stripe live key, npm token, private key block, credentials inside a URL | **Proven** (a `fact`), high |
+| AWS access key id, GitHub token, Slack token, Google API key, Stripe live key, npm token, private key block, credentials inside a URL (to a real host) | **Proven** (a `fact`), high |
 | A key file or a `.env` file added (`.pem`, `.key`, `id_rsa`, `.env`, …; not `.env.example`) | **Proven**, high |
 | A string assigned to a name like `password`, `secret`, `api_key`, `token` | Corroborated if the file is production code (the pattern plus the path), else a hint |
 
-Deliberately *not* proven, because they are very often fixtures: any of the patterns above inside a test, demo, example, fixture or docs path, a private-key header with no key body under it, documented example keys (anything containing `EXAMPLE`), placeholders (`changeme`, `${…}`, `process.env…`, `$(…)`), and values that are only words joined by dashes (`current-password`).
+Deliberately *not* proven, because they are very often fixtures: any of the patterns above inside a test, demo, example, fixture or docs path, a password in a URL that points at this computer (`localhost`, `127.0.0.1`, `[::1]`), at a service name with no dot (`postgres`, `core-db`: a compose or cluster name) or at a documentation address (`example.com`, `.test`) when every URL on the line is like that (a development database in `.env.example` or a CI file; a real host on the same line keeps it proven), a private-key header with no key body under it, documented example keys (anything containing `EXAMPLE`), placeholders (`changeme`, `${…}`, `process.env…`, `$(…)`), and values that are only words joined by dashes (`current-password`).
 
 ### Risky patterns
 
@@ -49,7 +49,7 @@ Added lines in the right language, outside test, demo, preview, docs, fixture, m
 
 | Rule | Severity | Looks for |
 |---|---|---|
-| `guard-removed` | Correctness · medium · CWE-754 | A removed `if …` with an early exit (`return`/`raise`/`throw`/…) in the same hunk, where the hunk adds no check of its own. Not reported when a whole file was deleted. |
+| `guard-removed` | Correctness · medium · CWE-754 | A removed `if …` with an early exit (`return`/`raise`/`throw`/…) in the same hunk, where the hunk adds no check of its own. Not reported when a whole file was deleted, when the guard went away with the block it was in (the function or handler that held it was removed and none of its body was kept; a signature that was only rewritten still counts), when the line is a branch on a value (`if (kind === "a")`, not `!==`, with no `throw`/`raise`: removing it removes a case), or when the hunk adds a call to a helper named like a check (`checkKey(`, `validateInput(`, `requireAuth(`). |
 | `assertion-removed` | Tests · medium | In a test file, a removed assertion with no assertion added in its place |
 
 ### Dependencies
@@ -63,7 +63,7 @@ For `package.json`, `requirements*.txt`, `go.mod` and `Cargo.toml`, the manifest
 | …or whose version is `*`, `latest`, a git URL or an http URL | Corroborated, medium | Same, with `rule:unpinned-spec` |
 | An install script added (`preinstall`, `install`, `postinstall`) | Corroborated, medium | The rule plus the manifest change |
 
-In the first commit of a repository every dependency is "new": plain ones are skipped, look-alikes and unpinned ones are still reported.
+In the first commit of a repository, and in a manifest that is itself new (a new package in the repository), every dependency is "new": plain ones are skipped, look-alikes and unpinned ones are still reported. A `*` next to a package the repository holds itself (an npm workspace member) is the workspace link, not an open range.
 
 ### Tests
 
@@ -86,6 +86,8 @@ The revert and mutation results also add a `coverage` signal to a nearby risky f
 
 Needs `allow-run` and a Chromium-based browser. Each is measured in a real render and counts only if it is new at the head, in that page and combination. Each finding names the combinations it appears in, and says "when mirrored" if it appears only in the mirrored ones.
 
+`look` also lists what changed underneath each page, whether or not it is a problem: a data call added or gone, a call that answers differently, a warning gone, the title. Only the worse ones (a call made more often, a new warning) are findings; the list is in the CLI's text, the MCP answer and the JSON (`calls`), with each page's speed at both ends (`speed`). `--no-speed` (MCP `speed: false`) skips the three extra loads.
+
 | Kind | Lens · severity | What is measured | Blocks? |
 |---|---|---|---|
 | Things overlap | UI · medium | Two content boxes (image, button, input, or an element with its own text) overlap by 150 px² and by a quarter of the smaller one. Fixed and sticky elements are ignored. | No |
@@ -93,9 +95,15 @@ Needs `allow-run` and a Chromium-based browser. Each is measured in a real rende
 | Text is hard to read | UI · medium · WCAG 1.4.3 | Text colour against the real background behind it (alpha blended, images skipped) under 4.5:1, or 3:1 for large text | No |
 | The page scrolls sideways | UI · medium | The page is wider than its window | No |
 | An image has no alt text · a control has no accessible name · a form field has no label | UI · low | WCAG 1.1.1, 4.1.2, 1.3.1 | No |
+| The page has no language · heading levels skip · a positive tabindex changes the keyboard order · an id is used more than once | UI · low | `<html>` without `lang` (WCAG 3.1.1); a visible heading more than one level below the one before it (1.3.1); `tabindex` above 0 on a visible element (2.4.3); the same `id` on two elements, so a label or an aria reference finds only the first | No |
 | The page shows nothing | Correctness · high | No text and no image or canvas, or the page no longer opens | **Yes** |
 | The page throws an uncaught error | Correctness · high | A DevTools exception while loading | **Yes** |
 | The page logs an error · a request fails | Correctness · medium | `console.error`, a 4xx or 5xx or a network failure (favicon ignored) | No |
+| Text that isn't in the translation files | UI · low | Only in a project with translation files (JSON, YAML or `.po` in a `locales`, `i18n`, `messages`, `translations` or similar folder): a text the page shows at the head that no file has (placeholders such as `{{x}}`, `{x}`, `%s` and ICU plurals match anything, so "Total: 40 €" counts as translated), that the base page didn't already show, that isn't data (numbers, codes, emails, addresses, what the page's JSON script tags hold), **and that a changed line of a source file wrote** (not a translation file, a test or a fixture). Anchored on that line. | No |
+| The page logs a new warning | Correctness · low | A `console.warn` the base didn't log (warnings that differ only in their numbers are the same warning) | No |
+| The page calls the same thing more often | Performance · low · `behaviour-diff` | A data call (fetch, XHR, an event stream, a socket), by method and path with ids folded, made more times at the head than at the base: `GET /api/cart is called 2 times, was 1`. Never a query value, a header or a body. | No |
+| The page loads clearly slower | Performance · medium | Three more loads at each end (desktop, light): the middle largest paint (or load) rose by 300 ms and 30%, or the main thread was blocked 200 ms longer, or the layout shifted 0.1 more, and **every** load at the head was slower than every load at the base. Measured on whatever the project serves (usually a dev build), so the change matters, not the numbers. | No |
+| The page loads clearly more script | Performance · low | The script it fetched grew by 20 KB and 10% | No |
 | Text typed into the page becomes markup | Security · high · CWE-79 | The `<assay-probe>` marker, typed into a field or put in a query parameter, appears in the page | **Yes** |
 
 ## Adding or changing a check

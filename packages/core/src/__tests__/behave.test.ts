@@ -172,3 +172,18 @@ py('Python functions are compared the same way', async () => {
   const found = c.findings.find(x => x.origin === 'run' && x.evidence.some(e => e.kind === 'behaviour-diff'))!;
   assert.match(found.title, /^double\(\) answers differently/);
 });
+
+test('an escaping helper that stops escaping quotes is a difference: the inputs for text carry markup characters', async () => {
+  const esc = (re: string): string => `const MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };\nexport const esc = s => String(s ?? '').replace(${re}, c => MAP[c]);\n`;
+  const repo = makeRepo();
+  const base = repo.commit({ 'package.json': PKG, 'src/esc.js': esc('/[&<>"\']/g'), 'test/e.test.js': "import test from 'node:test';\ntest('ok', () => {});\n" }, 'Base');
+  const head = repo.commit({ 'src/esc.js': esc('/[&<>]/g') }, 'Simpler esc');
+  core.setRepoSettings(repo.dir, { allow: true, timeout: 120 });
+  const c = core.openCase({ repo: repo.dir, range: `${base}..${head}` });
+  const report = await core.proveCase(c, { mutants: 0, reverts: 0 });
+  const f = report.behaviour!.functions.find(x => x.name === 'esc')!;
+  assert.equal(f.status, 'differs', 'a quote that used to be escaped is not');
+  const found = c.findings.find(x => x.origin === 'run' && x.evidence.some(e => e.kind === 'behaviour-diff'))!;
+  assert.match(found.title, /^esc\(\)/);
+  assert.match(JSON.stringify(found.observed), /&quot;|&#39;/, 'the answers shown are the escaped and the unescaped text');
+});

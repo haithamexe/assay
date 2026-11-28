@@ -24,7 +24,8 @@ A tier is **computed from the evidence**, never typed in by hand. Anything that 
 
 1. **Free checks** read the diff only: committed secrets, risky patterns (HTML injection, `eval`, shell commands, SQL built from text, certificate checks turned off, …), dependency changes (look-alike package names, install scripts), and logic that changed with no test. [All checks →](docs/CHECKS.md)
 2. **Proof** runs *your project's own tests* in clean copies of the base and the head. A test that passed before and fails now is a proven regression. It then puts a risky change back as it was, and makes small deliberate changes to the new lines, to find what no test notices.
-3. **Browser checks** open your pages in a Chrome, Edge or Brave you already have, at the base and at the head, in 12 combinations (desktop and phone, light and dark, as loaded, mirrored right to left, and with the text swapped for longer Arabic). Only what is *new at the head* is reported: overlapping or cut-off content, unreadable text, a page that scrolls sideways, uncaught errors, failed requests, and an XSS probe. Each finding points at the changed line that caused it, and the report has a before/after slider.
+3. **Browser checks** open your pages in a Chrome, Edge or Brave you already have, at the base and at the head, in 12 combinations (desktop and phone, light and dark, as loaded, mirrored right to left, and with the text swapped for longer Arabic). Only what is *new at the head* is reported: overlapping or cut-off content, unreadable text, a page that scrolls sideways, missing labels, names, alt text or language, skipped headings, uncaught errors, failed requests, a page that loads clearly slower or fetches clearly more script, a call made more often, text a change wrote that no translation file has, and an XSS probe. Each finding points at the changed line that caused it, and the report has a before/after slider.
+4. **Project mode** (`assay checkup`) looks at the project as it is rather than a change: a key committed long ago is found, and each finding says whether it is new since the last checkup. It also reads a HAR, a flow or an OpenAPI file, and prints JSON other tools can read. `assay test` runs your tests once and lists each failure with its file, line, expected and actual, with coverage if you ask. `assay attack` tries the usual security weaknesses against your app running on this computer. `assay gremlins` sends a browser through your app clicking and typing nonsense, seeded, and tells you the steps that broke it. `assay try react@19` installs a new version in a throwaway copy and tells you what would break before you upgrade. [Project mode →](docs/PROJECT-MODE.md)
 
 ![Before and after, from the real browser: the price badges now sit on the product images, and the boxes were measured on the page](docs/images/dashboard-before-after.png)
 
@@ -124,11 +125,11 @@ The agent gets thirteen tools (`case_open`, `prove`, `look`, `brief`, `memory`, 
 
 ## Safety in one paragraph
 
-Reading a diff runs nothing. Running tests, a dev server or a browser happens only after you ran `assay allow-run` in that repository, only with the project's own test command (found from its manifest, or typed by you, never supplied by a request), and only inside clean copies under `~/.assay/work` that are deleted afterwards. Your repository is only read. Secrets Assay finds are masked everywhere: in case files, caches, reports and tool answers. [The threat model →](SECURITY.md)
+Reading a diff runs nothing. Running tests, a dev server or a browser happens only after you ran `assay allow-run` in that repository, only with the project's own test command (found from its manifest, or typed by you, never supplied by a request), and only inside clean copies under `~/.assay/work` that are deleted afterwards. Your repository is only read. Three things need a second yes from a terminal: `assay test --here` runs your tests in your own folder (`assay allow-run --here`), and `assay attack --writes` and `assay gremlins` (which click and type) change data in your running app (`assay allow-run --writes`), and `assay try` makes your package manager reach its registry (`assay allow-run --network`). Secrets Assay finds are masked everywhere: in case files, caches, reports and tool answers. [The threat model →](SECURITY.md)
 
 ## Status
 
-Built and tested (205 tests, including real `npm test` runs and a real browser):
+Built and tested (273 tests, including real `npm test` runs and a real browser):
 
 - the engine, CLI, MCP server and one-file HTML report
 - proof: tests at base and head, the revert test, mutation, with caching and a time budget
@@ -137,6 +138,11 @@ Built and tested (205 tests, including real `npm test` runs and a real browser):
 - memory: standards packs as files, mistakes with stats that expire, learning from your fix commits
 - reviewers: a panel planned and priced before it is spent, blind briefs, cross-examination, and a Stop hook
 - calibration: known bugs planted in a throwaway repository, the free checks and each reviewer scored, reviewers that earn nothing left out
+- project mode: a checkup of the project as it is, what is new since the last one, HAR, flow and OpenAPI inputs, a JSON contract
+- `assay try`: one package at a new version in a throwaway copy: what breaks (type check, build, tests, pages) before you upgrade, behind its own yes for the registry
+- `assay gremlins`: a seeded browser clicking and typing nonsense through your app, each problem with its steps, behind the same second yes as attack's writes
+- `assay attack`: a security pass on your running app, reads by default, writes behind their own yes
+- `assay test`: the project's tests once, each failure with its file and line, coverage, in a clean copy or (allowed separately) your own folder
 
 Not built yet: nothing is queued; the known limits are in the charter. [The roadmap and the decisions behind it →](docs/PROJECT.md)
 
@@ -148,6 +154,7 @@ The `demo/` folder has the clickable demo the dashboard was built from (sample d
 |---|---|
 | [Getting started](docs/GETTING-STARTED.md) | Install, first review, proof, browser checks, the MCP server, CI |
 | [Usage](docs/USAGE.md) | Every command and flag, exit codes, ranges, where state is kept |
+| [Project mode](docs/PROJECT-MODE.md) | `assay checkup`: the project as it is, what is new, the inputs, the JSON contract |
 | [Dashboard](docs/DASHBOARD.md) | The screens, what each button does, how it is kept safe |
 | [Calibration](docs/CALIBRATION.md) | Planting known bugs, the scoreboard, leaving out a reviewer that earns nothing |
 | [Reviewers](docs/REVIEWERS.md) | The panel, what it costs, blind briefs, cross-examination, the Stop hook |

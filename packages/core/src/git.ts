@@ -23,6 +23,19 @@ export function git(repo: string, args: string[], opts: { allowFail?: boolean; i
   }
 }
 
+/** Like git(), for output that must stay bytes (file contents read in a batch, where sizes are counted in bytes). */
+export function gitBuffer(repo: string, args: string[], opts: { input?: string; maxBuffer?: number } = {}): Buffer {
+  try {
+    return execFileSync('git', ['-c', 'core.quotepath=off', '-C', repo, ...args], {
+      maxBuffer: opts.maxBuffer ?? 128 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, input: opts.input,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' }
+    });
+  } catch (err) {
+    const e = err as { stderr?: Buffer | string; message: string };
+    throw new GitError(`git ${args[0]} failed: ${String(e.stderr || e.message).trim().split('\n')[0]}`);
+  }
+}
+
 /** Like git(), for output that takes a while (a long history with patches): the event loop keeps serving while git works, and an abort signal stops it. */
 export function gitAsync(repo: string, args: string[], opts: { maxBuffer?: number; signal?: AbortSignal } = {}): Promise<string> {
   return new Promise((resolve, reject) => {

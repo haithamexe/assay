@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "The engine: git facts, free checks, evidence, the gate, cases. Only Node, no dependencies.",
+  "description": "The engine: git facts, free checks, evidence, the gate, cases. Only Node and plainkit (our own zero-dependency kit).",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,5 +14,11 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "assets"]
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "dependencies": {
+    "@haithamexe/plainkit": "^0.1.0"
+  }
 }

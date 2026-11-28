@@ -54,10 +54,11 @@ t('memory in the page: browse, search, switch a pack, learn from history and add
     assert.match(await p.evaluate<string>('location.hash'), /^#\/memory\?id=/, 'and it is in the address');
 
     // search narrows the list without rebuilding the page (the box keeps its place)
+    const all = await count('.memrow');
     await p.evaluate("(function(){var q=document.querySelector('#memq');q.focus();q.value='html';q.dispatchEvent(new Event('input',{bubbles:true}));})()");
     await sleep(300);
     const n = await count('.memrow');
-    assert.ok(n >= 1 && n <= 5, `search found ${n}`);
+    assert.ok(n >= 1 && n <= 10 && n < all / 4, `search found ${n} of ${all}`);
     assert.equal(await p.evaluate<boolean>("document.activeElement && document.activeElement.id === 'memq'"), true, 'typing never loses its place');
     await click('[data-act="mem-kind"][data-v="question"]');
     await sleep(300);

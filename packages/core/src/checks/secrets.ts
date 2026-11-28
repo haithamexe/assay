@@ -54,8 +54,24 @@ export function redactSecrets(text: string): string {
 /** Random-looking, not a placeholder, not an attribute name. */
 const valueOk = (v: string): boolean => !FAKE.test(v) && !WORDY.test(v) && entropy(v) >= 3;
 
+/**
+ * A password in a URL that points at this computer, a compose or cluster service name (one label, no dots) or a documentation address is a development default,
+ * not a leak: nobody outside can reach that machine. Every URL with a password on the line must be like that. Found on real repositories, where each proven
+ * hit of this kind was a local database in .env.example, a CI file or a test setup.
+ */
+function harmlessUrl(line: string): boolean {
+  const hosts = [...line.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@'"]+:[^\s/@'"]{3,}@(\[[^\]]+\]|[^\s:/'"?#]+)/gi)].map(m => m[1].toLowerCase().replace(/^\[|\]$/g, ''));
+  if (!hosts.length) return false;
+  return hosts.every(h =>
+    h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h === '0.0.0.0' || /^127(?:\.\d{1,3}){3}$/.test(h) ||
+    /(?:^|\.)example(?:\.(?:com|org|net))?$/.test(h) || /\.(?:test|invalid)$/.test(h) ||
+    /^[<{$%]/.test(h) || /^(?:host|hostname|server)$/.test(h) ||
+    (/^[a-z0-9_-]+$/.test(h) && !/^\d+$/.test(h)));
+}
+
 export const secrets: Check = ctx => {
   const out: RawFinding[] = [];
+  const whole = ctx.whole === true;
   for (const f of ctx.files) {
     if (f.binary || isLockfile(f.path) || /\.(?:map|snap)$/.test(f.path)) continue;
     if (f.status !== 'deleted') {
@@ -63,10 +79,10 @@ export const secrets: Check = ctx => {
       const envFile = ENV_FILE.test(f.path) && !ENV_OK.test(f.path);
       if (keyFile || envFile) {
         out.push({
-          check: 'secrets', key: `file:${f.path}`, title: keyFile ? `A key file was added: ${f.path.split('/').pop()}` : `A .env file was added: ${f.path.split('/').pop()}`,
+          check: 'secrets', key: `file:${f.path}`, title: `${keyFile ? 'A key file' : 'A .env file'} ${whole ? 'is tracked' : 'was added'}: ${f.path.split('/').pop()}`,
           lens: 'Security', severity: 'high', file: f.path, line: 1, side: 'added', text: f.path,
           evidence: [{ kind: 'fact', source: 'fact:secret-file', what: keyFile ? 'A private key or certificate file is now in the repository.' : 'A .env file (usually holding real values) is now in the repository.' }],
-          observed: [`${f.path} is new in this commit.`, 'It stays in git history even if a later commit deletes it.'],
+          observed: [whole ? `${f.path} is tracked in git at this commit.` : `${f.path} is new in this commit.`, 'It stays in git history even if a later commit deletes it.'],
           inferred: ['If it holds real values they are readable by everyone with access to the repository. Rotate them, then remove the file.'], ref: 'CWE-798'
         });
       }
@@ -85,14 +101,15 @@ export const secrets: Check = ctx => {
         // A key header with no key under it, or a token-shaped string in a test or example path, is very often a fixture:
         // it's a pattern, not a fact, so it's a hint until something else agrees.
         const headerOnly = p.id === 'private-key' && !h.lines.slice(li + 1, li + 4).some(x => x.t === '+' && /^[A-Za-z0-9+/=]{40,}$/.test(x.text.trim()));
-        const soft = test || headerOnly;
+        const localUrl = p.id === 'url-credentials' && harmlessUrl(l.text);
+        const soft = test || headerOnly || localUrl;
         out.push({
-          check: 'secrets', key: `${p.id}:${f.path}:${l.n}`, title: `${p.name} ${soft ? 'pattern in' : 'added to'} ${f.path.split('/').pop()}`, lens: 'Security', severity: 'high',
+          check: 'secrets', key: `${p.id}:${f.path}:${l.n}`, title: `${p.name} ${soft ? 'pattern in' : whole ? 'in' : 'added to'} ${f.path.split('/').pop()}`, lens: 'Security', severity: 'high',
           file: f.path, line: l.n, side: 'added', text: l.text,
           evidence: [soft
-            ? { kind: 'rule', source: `rule:${p.id}`, what: `${p.name} pattern on line ${l.n}: ${maskSecret(value, p.keep)} (${headerOnly ? 'a header with no key under it' : 'in a test or example path'}: may be a fixture)` }
+            ? { kind: 'rule', source: `rule:${p.id}`, what: `${p.name} pattern on line ${l.n}: ${maskSecret(value, p.keep)} (${headerOnly ? 'a header with no key under it' : localUrl && !test ? 'a local or example address' : 'in a test or example path'}: may be a fixture)` }
             : { kind: 'fact', source: `fact:${p.id}`, what: `${p.name} on line ${l.n}: ${maskSecret(value, p.keep)}` }],
-          observed: [`Line ${l.n} adds a ${p.name.toLowerCase()}: ${maskSecret(value, p.keep)}.`, ...(soft ? ['It sits in a test or example path, or has no key under it, so it may be a fixture.'] : ['It stays in git history even if a later commit removes it.'])],
+          observed: [`Line ${l.n} ${whole ? 'has' : 'adds'} a ${p.name.toLowerCase()}: ${maskSecret(value, p.keep)}.`, ...(soft ? ['It sits in a test or example path, points at a local or example address, or has no key under it, so it may be a fixture.'] : [whole ? 'It is in git history: removing the line doesn’t take it out of earlier commits.' : 'It stays in git history even if a later commit removes it.'])],
           inferred: [soft ? 'Probably a fixture. If it is a real secret, rotate it and remove it.' : 'If it is live, anyone with read access to the repository has it. Rotate it, then remove it.'], ref: 'CWE-798'
         });
         break;

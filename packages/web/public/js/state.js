@@ -16,6 +16,8 @@ export const S = {
   rv: { data: null, request: '', error: null, tab: 'panel', cal: null, calError: null, calRunning: null },
   // memory
   mem: { data: null, tab: 'mistakes', kind: 'all', q: '', sel: null, confirm: null, mining: null, error: null },
+  // gremlins
+  gr: { data: null, run: null, sel: null, error: null },
   // settings
   settings: null, theme: 'auto',
   // loading and errors
@@ -51,6 +53,7 @@ export function restore() {
     if (p.id && p.id !== S.caseId) { S.caseId = p.id; S.view = null; S.item = null; S.jobResult = null; S.replay = {}; S.rv.data = null; S.rv.request = ''; }
     S.rv.tab = p.tab === 'score' ? 'score' : 'panel';
   }
+  if (page === 'gremlins' && p.id) S.gr.sel = p.id;
   if (page === 'memory') {
     S.mem.tab = p.tab === 'standards' || p.tab === 'mine' ? p.tab : 'mistakes';
     if (p.id) S.mem.sel = p.id;
@@ -63,6 +66,7 @@ export function sync() {
   if (page === 'timeline') p = { mode: S.sel.mode, from: S.sel.mode === 'branch' ? '' : S.sel.from, to: S.sel.mode === 'branch' ? '' : S.sel.to };
   else if (page === 'case') p = { id: S.caseId, item: S.item, tab: S.tab, lens: S.lens === 'all' ? '' : S.lens };
   else if (page === 'reviewers') p = { id: S.caseId, tab: S.rv.tab === 'score' ? 'score' : '' };
+  else if (page === 'gremlins') p = { id: S.gr.sel };
   else if (page === 'memory') p = { tab: S.mem.tab === 'mistakes' ? '' : S.mem.tab, id: S.mem.tab === 'mistakes' ? S.mem.sel : '' };
   const q = new URLSearchParams(Object.fromEntries(Object.entries(p).filter(([, v]) => v))).toString();
   const next = `#/${page}${q ? `?${q}` : ''}`;

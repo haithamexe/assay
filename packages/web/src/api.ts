@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  assayHome, assayPath, branchSpan, briefOf, commitInfo, detectCommand, doctor, findBrowser, findingState, git, GitError, isOpen, languageOf, listCases,
+  assayHome, assayPath, branchSpan, describeStep, listGremlinRuns, loadGremlinRun, briefOf, commitInfo, detectCommand, doctor, findBrowser, findingState, git, GitError, isOpen, languageOf, listCases,
   calibration, loadCase, lookCase, memory, openCase, proveCase, replayEvidence, repoSettings, resolveFinding, resolveRev, reviewBudget, reviewers, setRepoSettings, timeline, verdictOf
 } from '@assay/core';
 import type { Case, FindingState } from '@assay/core';
@@ -249,6 +249,28 @@ const ROUTES: Record<string, (ctx: Ctx, req: ApiReq) => unknown | Promise<unknow
     const known = c.runs.flatMap(r => r.shots ?? []).some(s => name === s.base || name === s.head || name === s.diff);
     if (!known || !/^[A-Za-z0-9._-]{1,120}\.jpg$/.test(name) || name.includes('..')) throw new HttpError(404, 'No such picture.');
     try { return new Binary(fs.readFileSync(assayPath('shots', c.id, name)), 'image/jpeg'); } catch { throw new HttpError(404, 'That picture is no longer on disk. Look at the pages again to take it.'); }
+  },
+
+  'GET /api/gremlins': ctx => {
+    const s = repoSettings(ctx.repo);
+    return {
+      allowed: s.allow === true, writes: s.writes === true, allowCommand: allowCommand(ctx.repo), command: `assay allow-run --writes --repo "${ctx.repo}"`,
+      runs: listGremlinRuns(ctx.repo).map(r => ({
+        id: r.id, createdAt: r.createdAt, mode: r.mode, url: r.url ?? null, commit: r.commit, seed: r.seed, actions: r.actions, signedIn: r.signedIn, phone: r.phone,
+        findings: r.findings.length, newCount: r.findings.filter(f => f.since === 'new').length, goneCount: r.gone.length
+      }))
+    };
+  },
+
+  'GET /api/gremlins/run': (ctx, { query }) => {
+    const r = loadGremlinRun(ctx.repo, text(query.get('id'), 'The run', 60));
+    if (!r) throw new HttpError(404, 'There is no such run for this project.');
+    const { trail, ...rest } = r;
+    const replay = (finding?: string): string => `assay gremlins replay ${r.id}${finding ? ` --finding ${finding}` : ''} --repo "${ctx.repo}"`;
+    return {
+      ...rest, repo: undefined, trailLength: trail.length, replayCommand: r.replay + ` --repo "${ctx.repo}"`,
+      findings: r.findings.map(f => ({ ...f, stepsText: f.steps.map(describeStep), replayCommand: replay(f.id) }))
+    };
   },
 
   'GET /api/memory': ctx => memoryView(ctx),

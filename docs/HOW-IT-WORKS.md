@@ -24,9 +24,9 @@ Evidence has a **kind** and a **source** (who produced it, e.g. `rule:html-injec
 | `test-fail` | A test that passed at the base fails at the head | `prove` |
 | `revert-test` | Putting this change back changes no test result | `prove` |
 | `mutation-survivor` | A deliberate change to this line went unnoticed by every test | `prove` |
-| `measurement` | A real browser measured it: overlap, cut-off text, contrast, an uncaught error | `look` |
+| `measurement` | A real browser measured it: overlap, cut-off text, contrast, an uncaught error, a page that loads clearly slower | `look` |
 | `probe` | Text typed into the page, or put in its address, became markup | `look` |
-| `behaviour-diff` | A changed function answers differently for the same inputs at the base and at the head ("Function before and after" below) | Proven fact about the code, medium at most, never blocks |
+| `behaviour-diff` | A changed function answers differently for the same inputs at the base and at the head ("Function before and after" below), or a page calls the same thing more often at the head (`look`) | Proven fact about the code, medium at most, never blocks |
 
 **Signal kinds** point at something without showing it:
 

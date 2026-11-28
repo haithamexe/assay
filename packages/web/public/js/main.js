@@ -1,4 +1,5 @@
 import { afterCase, loadCase, pageCase } from './case.js';
+import { loadGremlins, pageGremlins } from './gremlins.js';
 import { loadMemory, pageMemory } from './memory.js';
 import { loadReviewers, pageReviewers } from './reviewers.js';
 import { loadSettings, pageSettings } from './settings.js';
@@ -8,7 +9,7 @@ import { $, $$, announce, api, html, ico, put, raw } from './lib.js';
 
 /* The shell: the sidebar, the address, the Jump-to palette, and keeping the page in step with the repository. */
 
-const PAGES = [['timeline', 'Timeline', 'clock'], ['case', 'Case file', 'file'], ['reviewers', 'Reviewers', 'users'], ['memory', 'Memory', 'db'], ['settings', 'Settings', 'gear']];
+const PAGES = [['timeline', 'Timeline', 'clock'], ['case', 'Case file', 'file'], ['reviewers', 'Reviewers', 'users'], ['memory', 'Memory', 'db'], ['gremlins', 'Gremlins', 'eye'], ['settings', 'Settings', 'gear']];
 
 /* ---------------------------------------------------------------- the sidebar */
 function chrome() {
@@ -18,7 +19,7 @@ function chrome() {
     const href = (id === 'case' || id === 'reviewers') && S.caseId ? `#/${id}?id=${encodeURIComponent(S.caseId)}` : `#/${id}`;
     return html`<a href="${href}" ${page === id ? raw('aria-current="page"') : ''}>${ico[icon]}<span>${label}</span>${id === 'case' && blockers ? html`<span class="count" title="Blocking problems">${blockers}</span>` : ''}</a>`;
   };
-  put($('#nav'), html`<div class="nav-group">${PAGES.slice(0, 4).map(link)}</div><div class="nav-group nav-settings">${link(PAGES[4])}</div>`);
+  put($('#nav'), html`<div class="nav-group">${PAGES.slice(0, 5).map(link)}</div><div class="nav-group nav-settings">${link(PAGES[5])}</div>`);
   put($('#project'), S.repo ? html`<b>${S.repo.name}</b><span class="dim">${S.repo.branch} · ${S.repo.headShort}</span>` : html`<span class="dim">Reading…</span>`);
   const other = S.repo && S.repo.job && !(S.job && S.job.id === S.repo.job.id) ? S.repo.job : null;
   put($('#foot'), html`<div class="live-state" role="status">${S.offline ? html`<span class="dot dot-off"></span> Disconnected: run assay dashboard again` : html`<span class="dot dot-pulse"></span> Live`}</div>${other ? html`<div class="live-state"><span class="spinner"></span> ${other.label}</div>` : ''}${S.repo && !S.repo.allowed ? html`<div class="live-state">${ico.lock} Running this project’s code is off</div>` : ''}`);
@@ -31,7 +32,7 @@ function render() {
   const { page } = parseHash();
   const focused = keyOf(document.activeElement);
   chrome();
-  const fn = { timeline: pageTimeline, case: pageCase, reviewers: pageReviewers, memory: pageMemory, settings: pageSettings }[page] || pageTimeline;
+  const fn = { timeline: pageTimeline, case: pageCase, reviewers: pageReviewers, memory: pageMemory, gremlins: pageGremlins, settings: pageSettings }[page] || pageTimeline;
   put($('#main'), fn());
   if (page === 'case') afterCase();
   if (focused) { const el = $$('[data-act]').find(x => keyOf(x) === focused); if (el) el.focus({ preventScroll: true }); }
@@ -43,7 +44,7 @@ async function route() {
   const mine = ++routeId;
   restore();
   const { page } = parseHash();
-  if (!['timeline', 'case', 'reviewers', 'memory', 'settings'].includes(page)) { go('timeline'); return; }
+  if (!['timeline', 'case', 'reviewers', 'memory', 'gremlins', 'settings'].includes(page)) { go('timeline'); return; }
   try {
     if (!S.repo) S.repo = await api('/api/state');
     if (mine !== routeId) return;
@@ -52,6 +53,7 @@ async function route() {
     if (page === 'case') await loadCase();
     if (page === 'reviewers') await loadReviewers();
     if (page === 'memory') await loadMemory();
+    if (page === 'gremlins') await loadGremlins();
     if (page === 'settings') await loadSettings();
     S.error = page === 'case' ? S.error : null;
   } catch (e) {

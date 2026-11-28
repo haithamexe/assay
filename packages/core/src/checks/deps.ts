@@ -1,3 +1,4 @@
+import { git } from '../git.js';
 import type { Check, CommitCtx, RawFinding } from './types.js';
 
 interface Dep { name: string; spec: string }
@@ -105,6 +106,26 @@ function lineOf(text: string | null, re: RegExp): { n: number; text: string } {
 }
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** The packages this repository holds itself, by name: next to one of them a "*" is the workspace link, not an open version range. Read only when a "*" turns up. */
+const workspaceCache = new Map<string, Set<string>>();
+function workspaceNames(ctx: CommitCtx): Set<string> {
+  const key = `${ctx.repo}\0${ctx.commit}`;
+  const known = workspaceCache.get(key);
+  if (known) return known;
+  const names = new Set<string>();
+  const manifests = git(ctx.repo, ['ls-tree', '-r', '--name-only', ctx.commit], { allowFail: true, maxBuffer: 64 * 1024 * 1024 })
+    .split('\n').filter(p => /(?:^|\/)package\.json$/.test(p) && !/(?:^|\/)node_modules\//.test(p)).slice(0, 300);
+  for (const p of manifests) {
+    try {
+      const n = (JSON.parse(git(ctx.repo, ['show', `${ctx.commit}:${p}`], { allowFail: true }) || '{}') as { name?: unknown }).name;
+      if (typeof n === 'string') names.add(n);
+    } catch { /* not JSON: not a package we can name */ }
+  }
+  if (workspaceCache.size > 50) workspaceCache.clear();
+  workspaceCache.set(key, names);
+  return names;
+}
+
 function analyseManifest(ctx: CommitCtx, file: string, eco: Eco): RawFinding[] {
   const now = ctx.read(file, 'commit');
   const before = ctx.read(file, 'parent');
@@ -117,7 +138,7 @@ function analyseManifest(ctx: CommitCtx, file: string, eco: Eco): RawFinding[] {
   for (const [name, dep] of a) {
     const old = b.get(name);
     const isNew = !old;
-    const unpinned = UNPINNED.test(dep.spec) && (isNew || old.spec !== dep.spec);
+    const unpinned = UNPINNED.test(dep.spec) && (isNew || old.spec !== dep.spec) && !(eco === 'npm' && dep.spec === '*' && workspaceNames(ctx).has(name));
     if (!isNew && !unpinned) continue;
     const loc = lineOf(now, eco === 'npm' ? new RegExp(`"${esc(name)}"\\s*:`) : eco === 'pypi' ? new RegExp(`^\\s*${esc(name)}\\b`, 'i') : new RegExp(`^\\s*(?:require\\s+)?${esc(name)}\\b`));
     const ev: RawFinding['evidence'] = [{ kind: 'diff', source: isNew ? 'diff:new-dependency' : 'diff:changed-dependency', what: isNew ? `${name} ${dep.spec} is new in ${file}.` : `${name} changed from ${old!.spec} to ${dep.spec} in ${file}.` }];
@@ -128,8 +149,9 @@ function analyseManifest(ctx: CommitCtx, file: string, eco: Eco): RawFinding[] {
       if (near) { ev.push({ kind: 'rule', source: 'rule:name-distance', what: `The name is ${near.d} letter${near.d > 1 ? 's' : ''} from "${near.other}".` }); severity = 'medium'; inferred.push(`It may be a look-alike of ${near.other}. Look-alike packages are a known way to ship malware.`); }
     }
     if (unpinned) { ev.push({ kind: 'rule', source: 'rule:unpinned-spec', what: `Version "${dep.spec}" isn't a fixed registry version.` }); severity = 'medium'; inferred.push('Whatever is behind that address can change without a commit here.'); }
-    // In the first commit every dependency is "new": that is the baseline, not a change. Only a look-alike or an unpinned one is worth saying.
-    if (ctx.parent === null && isNew && ev.length === 1) continue;
+    // In the first commit, or in a manifest that is itself new (a new package in the repository), every dependency is "new": that is the baseline, not a change.
+    // Only a look-alike or an unpinned one is worth saying.
+    if ((ctx.parent === null || before === null) && isNew && ev.length === 1) continue;
     if (!inferred.length) inferred.push('A new dependency is code you don’t control that now runs in your build or app.');
     out.push({
       check: 'dependencies', key: `${isNew ? 'new' : 'chg'}:${file}:${name}`, title: isNew ? `New dependency: ${name}` : `Dependency no longer pinned: ${name}`, lens: 'Supply chain', severity,

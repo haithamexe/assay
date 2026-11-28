@@ -28,6 +28,7 @@ One dashboard shows one repository. Start another on another port for another re
 | **Case file** | The verdict, the findings most important first, and for each one the lines, the evidence and, where there are pictures, before and after |
 | **Reviewers** | Who is worth running for this case, what it costs before anything is spent, and how far the panel has got. [The reviewers guide →](REVIEWERS.md) |
 | **Memory** | The mistakes this project has made before, the standards each is checked against, and what its own git history teaches. [The memory guide →](MEMORY.md) |
+| **Gremlins** | The runs of the seeded browser that clicks and types through the app, what each found with the steps behind it, and how it compares with the run before |
 | **Settings** | What Assay may run here, what it found on this computer, the theme |
 
 `Ctrl K` (or `⌘ K`) opens *Jump to…*: pages, commits, and the actions of the open case. Every slice you look at has an address (`#/case?id=…&item=…&tab=…`), so you can bookmark it, and the back button works.
@@ -97,6 +98,12 @@ In the **case file**, a finding that matches an entry shows it under the finding
 
 Changes on this screen change what the free checks report, so the timeline and the next case you open analyse the affected commits again, once. A case you already opened keeps what it found until you open it again. Nothing here can set `allow-run`, and the page can't send a pattern of its own: it can only add a suggestion that came from this project's history.
 
+### Gremlins
+
+The runs [`assay gremlins`](PROJECT-MODE.md#gremlins-assay-gremlins) kept for this project, newest first, each with its seed, how many problems it found and how many of them are new since the run before. A run opens on the right: where it went (an address, or a clean copy of a commit), how many actions it did, the pages it reached, the run it was compared with (a link to it), and each problem with its severity, *New* or *There before*, what the browser saw, **the steps that led to it** in words (`click “Save” → type "<script>…" into #note → double-click “Pay”`), advice, and the command that replays exactly those steps (with *Copy*). It also lists what was gone since the last run, the hosts the browser refused to talk to, and the controls it left alone.
+
+**The page runs nothing.** Gremlins click and type, so they need your own `assay allow-run --writes` in a terminal (D25 applies: a click in a page is no stronger than a flag an agent could pass). While that is off, the screen says so and shows the command with *Copy*; once it is on, it shows how to start a run and still doesn't start one. Everything a run holds (page text, console messages, an address) is shown as text through the same single door as the rest of the page.
+
 ## Running your code
 
 The test and page checks run **your project's own code**. Assay can't sandbox it, so a person has to switch it on, per repository, **in a terminal**:
@@ -129,6 +136,7 @@ A page on the internet must not be able to talk to this server, and a mistake in
 - The pictures are as taken at 1280 × 800 (desktop) and 390 × 844 (phone), as loaded and mirrored on desktop, in the light scheme.
 - It needs a current browser (it uses ES modules and `<dialog>`).
 - The screen shows one panel per case: a new budget with a kept panel says so and asks you to plan again (that starts the panel over).
+- The Gremlins screen only shows kept runs: starting one, and replaying one, are commands.
 - Memory can add suggestions from history here, but a pattern of your own (`assay memory add --pattern`), a pack file (`assay memory import`) and renaming a suggestion are command line only.
 
 ## For people working on it

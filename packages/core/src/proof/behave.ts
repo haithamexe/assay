@@ -118,7 +118,7 @@ const HINTS: Array<[RegExp, unknown[]]> = [
   [/^(?:is\w*|has\w*|can\w*|should\w*|flag|enabled|on|ok|verbose|force|strict)$/i, [true, false]],
   [/^(?:items|list|arr|array|xs|values|rows|lines|words|parts|names|ids|nums|numbers|stack|queue|tags)$/i, [[], [1], [3, 1, 2], ['a', 'b']]],
   [/^(?:obj|o|opts|options|config|cfg|data|payload|user|item|order|cart|params|props|ctx|settings|row|record)$/i, [{}, { a: 1 }, { id: 1, name: 'x', price: 10, qty: 2 }]],
-  [/^(?:s|str|string|text|name|label|title|word|msg|message|path|url|slug|id|key|code|email|query|prefix|suffix|sep|char|ch)$/i, ['', 'a', 'Hello World', '  padded  ', 'ÄÖ ا']],
+  [/^(?:s|str|string|text|name|label|title|word|msg|message|path|url|slug|id|key|code|email|query|prefix|suffix|sep|char|ch)$/i, ['', 'a', 'Hello World', '  padded  ', 'ÄÖ ا', '<a href="x">Tom & \'Jerry\'</a>', '../a b?c=1&d=%20;']],
   [/^(?:n|i|j|k|x|y|a|b|c|num|number|count|total|qty|quantity|amount|price|age|index|idx|len|length|size|limit|offset|pct|percent|rate|score|points|days|min|max|step|width|height|\w*(?:count|total|price|amount|rate|pct|size|index)\w*)$/i, [0, 1, -1, 2, 10, 18, 100, 2.5]]
 ];
 const ANY: unknown[] = [0, 1, -1, 'a', '', true, false, null, [], {}];

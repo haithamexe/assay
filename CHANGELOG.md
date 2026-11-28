@@ -2,6 +2,75 @@
 
 All notable changes. Back to the [README](README.md). The format follows [Keep a Changelog](https://keepachangelog.com); versions follow [Semantic Versioning](https://semver.org) and each release is a git tag (`v0.1.0`). Before 1.0 anything may still change between minor versions.
 
+## Unreleased
+
+### Fixed
+
+**Found by running the free checks over the recent history of eight real projects** (565 commits, read only), then on a copy of Assay itself
+- **A password in a URL to this computer is no longer a proven secret.** A development database in `.env.example`, a CI file or a test setup (`localhost`, `127.0.0.1`, `[::1]`, a service name with no dot such as `postgres`, or `example.com`) is shown as a hint; a real host, or one real host among local ones on the same line, is still proven. Before, each of these blocked the commit.
+- **"A guard was removed" is quieter.** Not reported when the function or handler that held the guard was deleted or moved whole (a signature that was only rewritten still counts), when the line is a branch on a value (`if (kind === "a")`; a refusal with `throw` still counts), or when the change adds a call to a check helper (`checkKey(`, `validateInput(`). On eight real projects the corroborated reports fell from 124 to 27.
+- **A `"*"` next to a package the repository holds itself is the workspace link,** not an open version range (29 corroborated reports to none), and the plain dependencies of a manifest that is itself new are the baseline, as in a first commit (all "New dependency" reports together: 190 to 86). Look-alikes and open ranges in it are still reported.
+- **The function before-and-after comparison no longer misses an escaping helper.** The text inputs now include markup and URL characters; a real change that stopped escaping quotes in a page helper was reported as "none answers differently" before.
+- Together, on those 565 commits: commits that needed a decision 75 to 32, proven findings 28 to 8 (the four commits still blocked add real `.env` files). Each fix is pinned by `realworld.test.ts` or `behave.test.ts` with made-up names and the shape that was found.
+
+
+### Added
+
+**Try an upgrade: `assay try <package>[@version]`** ([guide](docs/PROJECT-MODE.md#try-an-upgrade-assay-try), D67)
+- Before upgrading a package: two clean copies of a commit get your project's own install (the lockfile's versions), then the second gets that one package at the new version. A tag (`next`) or a partial version (`19`) is resolved by the package manager. The type check, the build and the tests run in both, and your dev server runs from both and the pages are compared in a browser (what they show, what they call, errors, speed, accessibility, a before and after picture).
+- The report says what breaks first (the install, the type check, the build, more tests failing and which, a page that no longer opens or throws), then what changes (it looks different, new problems, slower, heavier), or that nothing changed that Assay can see. `--fail-on breaks|changes`, `--json` (`assay.try/1`), `--pages`, `--no-pages`, `--no-tests`, `--ref`. npm, pnpm, yarn and bun. MCP: a `try` tool.
+- **The one check that reaches the internet, behind its own yes:** `assay allow-run --network` (Assay makes no call of its own: the package manager does, with your own registry settings). Install scripts are not run unless you add `--scripts` in your terminal; the MCP tool has no such argument. Both copies are removed after, and your own folder and `node_modules` are never touched.
+
+**Gremlins: `assay gremlins`** ([guide](docs/PROJECT-MODE.md#gremlins-assay-gremlins), D65)
+- A headless browser goes through your app by itself like an impatient, careless person: clicking whatever it finds, typing odd text into fields, double-clicking submit, pressing Enter, going back halfway. Seeded, so the same seed does the same things; each problem (uncaught error, blank page, the framework's error screen, server error, failing request, logged error) comes with the steps that led to it.
+- Behind `assay allow-run` **and** your own `assay allow-run --writes` (a click can save and a typed text can be sent). The browser talks to this computer only: a request to anything else is refused before it leaves and the hosts are listed. Controls named like delete, sign out or reset are left alone unless `--bold`.
+- `--url` goes through an app that is already running. With a commit instead, Assay starts your dev server (or serves your HTML) in a clean copy, and with `--base` runs the same seed at both ends and reports only what is new, anchored on a changed line when one wrote what the problem names. `--phone`, `--actions`, `--seed`, `--page`, `--fail-on high|medium|low`, `--json` (`assay.gremlins/1`). MCP: a `gremlins` tool.
+- **Signed in** (D66): a session for an app behind a login goes in `ASSAY_SESSION_COOKIE` / `ASSAY_SESSION_AUTHORIZATION` (the older `ASSAY_ATTACK_*` names still work, for attack too), with `--url`. The cookie is set on the app's origin, the Authorization header goes to that origin only, and the session is replaced with `[session]` wherever the page echoes it.
+- **Kept and compared** (D66): each run is kept (the last 30) and compared with the last one of the same app: each problem is first, new or there before, and what is gone is listed. `assay gremlins list`, `show`, `--no-save`.
+- **Replayed exactly** (D66): `assay gremlins replay <run> [--finding g-…]` does again the very steps a run recorded, in order, and says whether the problem came back (exit 2 when it did).
+- **A Gremlins screen** in the dashboard: the kept runs, each problem with its steps, the comparison, and the command to run or replay (the page runs nothing).
+
+**Attack my app: `assay attack`** ([guide](docs/PROJECT-MODE.md#attack-my-app-assay-attack), D64)
+- A security pass on your own app, running on this computer. Give its address (`--url`; Assay never starts it, and only `localhost`, `127.0.0.1`, `[::1]` or a `.localhost` name is accepted). The endpoints come from the repository's routers and OpenAPI file, a HAR and `--pages`, read without running anything.
+- Reads (GET only): security headers, cookie flags, CORS from another origin, script in the address that comes back unescaped (and, in a real browser, becomes an element), stack traces and SQL errors after a quote. With a session in `ASSAY_SESSION_COOKIE` or `ASSAY_SESSION_AUTHORIZATION`: calls that answer without it, and other ids. A GET named like an action (`logout`, `delete`, `reset`) is never sent.
+- Writes, behind `--writes` **and** your own `assay allow-run --writes` (no agent, tool or page can set it; `--off` takes it away): script saved through a form, a write sent as another site would send it, 20 wrong passwords, a broken body. A body is built from the OpenAPI file's property names and types, never from a recorded body.
+- Each finding has the request that shows it, the declaring file when known, a fix, and a tier computed from its evidence: **proven** when the response shows it whatever was meant, **hint** when it depends on what was meant (no-auth, other ids). `--fail-on high|medium|low` exits 2 on a proven finding that serious; `--json` is `assay.attack/1`. MCP: an `attack` tool (no session argument, `writes` refused until a person allows it).
+- The OpenAPI reader keeps each operation's JSON body as property names and types (never an example or a default); a checkup's list leaves them out unless asked for.
+
+**Text that isn't in the translation files** (`look`, [checks](docs/CHECKS.md#browser-checks), D63)
+- In a project with translation files (JSON, YAML or `.po` in a `locales`, `i18n`, `messages` or `translations` folder), `look` reads what each page shows at the head and compares it with them. Placeholders and ICU plurals are understood, so a translation with its values filled in counts. Numbers, codes, emails, addresses and what the page's JSON script tags hold are data, not words.
+- A text is a finding only if it is new at the head **and** a changed line of a source file wrote it (not a translation file, a test or a fixture), so text from an API or text that was already there never shows. It is anchored on that line, low, and replays as a comparison of both ends.
+- `look` says how many texts the pages showed and how many no file has (`translation` in the JSON), and tells a project that names a translation library but has no files where it looked.
+
+**Tests leave nothing behind.** `npm test` runs the suite through plainkit's `temp-run`: the fixtures, the throwaway repositories, the checkouts and the browser profiles all go into one temp folder for the run, which is removed at the end (a killed run's folder goes with the next run after 12 hours). Before, every run left a few hundred folders in the system's temp folder.
+
+**More in `look`: accessibility, speed, and what changed underneath** ([checks](docs/CHECKS.md#browser-checks), D62)
+- Four more accessibility rules, measured on each page in every combination and counted only when new at the head: the page has no language (WCAG 3.1.1), heading levels skip (1.3.1), a positive `tabindex` changes the keyboard order (2.4.3), an id is used more than once. They are in the WCAG 2.2 and pages packs.
+- Speed: each page is loaded three more times at each end (desktop, light) and its largest paint, load time, blocked main thread, layout shift and script size are compared. A page counts as **clearly slower** only when the middle moved by a clear margin *and* every load at the head was slower than every load at the base, so a noisy dev server can't prove anything. **Clearly more script** is 20 KB and 10% more. Both are measured, never block, and are anchored on the script that changed. `--no-speed` (MCP `speed: false`) skips them.
+- What changed underneath: each page's data calls (by method and path, ids folded; never a query value, a header or a body), its console warnings and its title, base against head. Every change is listed (`calls` in the JSON, a line in the CLI and MCP answers); a call made more often is a finding (`behaviour-diff`, low) and so is a new warning (low). Both replay as a comparison: the two ends are opened again.
+- plainkit's page now records every request (method, address, kind, answer, redirects followed) and `console.warn`, and a failed request carries its address instead of the browser's request id.
+
+**Running the tests once: `assay test`** ([usage](docs/USAGE.md#assay-test), D61)
+- Runs the project's own test command once, at a commit (HEAD by default), in a clean copy, and reads the runner's own report rather than its coloured output: how many passed, failed and were skipped, and each failure with its name, file, line, message, expected and actual. vitest and jest (their JSON), node:test (TAP), pytest (JUnit XML) and go (`-json`) are read in full; any other runner Assay finds, or a command you chose, is read from what it prints.
+- `--coverage` adds the share of lines the tests ran and the least covered files: istanbul's summary for vitest and jest, pytest-cov's JSON, go's cover profile, and V8's own coverage for node:test (nothing to install). Where a provider is missing it says what to install, and the tests still run.
+- `--match` and `--files` narrow it. A filter or file is an argument, never a command: the runners with a report start without a shell, and anything that could be read as an option, or a path outside the repository, is refused.
+- `--here` runs in your own folder, uncommitted work included, and needs its own yes: `assay allow-run --here` (`--off` takes it away). `--changed` (with `--here`) runs only the tests for uncommitted changes, for vitest and jest.
+- Failure messages, the output and file names go through the secrets masking like everything else. `--json` follows `"schema": "assay.test/1"`. Exit code 1 when a test fails.
+- MCP: a `test` tool, refused until a person ran `assay allow-run`, and `here` refused until they ran `assay allow-run --here`.
+- `runCommand` can keep what a command printed to stdout (`keepStdout`), for go's report.
+
+**Project mode: `assay checkup`** ([guide](docs/PROJECT-MODE.md), D60)
+- A checkup of the project as it is, not of a change: every tracked file at a commit (HEAD by default) goes through the secrets check, so a key, a key file or a `.env` file committed long ago is found and proven, masked as always. Only what is committed is read; uncommitted changes are counted, not checked.
+- From the second checkup on, each finding says whether it is **new** or **already there**, and what is **gone**. A finding is matched by its check, its file and its line's text, so a key that moved down a few lines is still the same one. The last 30 checkups per repository are kept (`--no-save` keeps none; `assay checkup list` shows them).
+- `--fail-on new` exits 2 when something proven or corroborated is new since the last checkup, `--fail-on any` when there is anything at all: an old problem doesn't have to fail every build.
+- `assay secrets` runs only that check. `assay show <id or key>` shows one checkup finding.
+- It also lists what the project describes, for the checks that will load pages or call the app: pages and endpoints from Next.js, Nuxt, Astro, SvelteKit and Remix router folders, plain HTML files, Express-style and NestJS routes, and the repository's own OpenAPI file; plus what you hand it: `--url` (an app on this computer only), `--pages`, `--har` (only methods and paths are kept: never a header, cookie, query value or body), `--flow` (Assay's `flow/1` steps, or a Chrome DevTools Recorder export) and `--openapi` (JSON or YAML).
+- `assay checkup --json` follows a versioned contract (`"schema": "assay.checkup/1"`), so CI and other tools can read it.
+- MCP: a `checkup` tool with the same inputs and a short answer.
+
+### Changed
+- The DevTools pipe client, the browser search, atomic writes, the home folder and stopping a process tree now come from **plainkit**, a small library with no dependencies that sister tools share (D58). npm installs it with Assay; nothing else changes for you. `CHROME_PATH` now points Assay at a browser too, after `ASSAY_BROWSER`. The YAML reader for OpenAPI files comes from plainkit as well.
+
 ## 0.1.0 — 2026-11-27
 
 The first release: the engine and its free checks, built-in proof, browser checks, the dashboard, memory, reviewers and their scoreboard. Everything below was built after the first version of 2026-11-25, which is kept at the end of this entry.

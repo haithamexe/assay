@@ -20,6 +20,12 @@ export interface RepoSettings {
   browser?: string;
   /** Tokens the reviewer panel may cost for a case (0 = free checks only). Harmless, so the dashboard may set it; it never runs anything. */
   budget?: number;
+  /** `assay test --here` may run the tests in the repository's own folder, uncommitted work included (D61). Terminal only, like `allow`. */
+  here?: boolean;
+  /** `assay attack --writes` may send requests that change data: saved text, wrong passwords, a request as another site would send it (D64). Terminal only, like `allow`. */
+  writes?: boolean;
+  /** `assay try` may let the package manager reach its registry: it installs a package version in a throwaway copy (D67). Terminal only, like `allow`. */
+  network?: boolean;
 }
 
 export const DEFAULT_BUDGET = 40_000;

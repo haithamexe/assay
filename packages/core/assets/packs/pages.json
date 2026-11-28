@@ -2,7 +2,7 @@
   "id": "pages",
   "name": "Pages that render and work",
   "edition": "Assay starter",
-  "note": "What opening the page in a real browser, at the base and at the head, can measure in 8 combinations: desktop and phone, light and dark, as loaded and mirrored right to left.",
+  "note": "What opening the page in a real browser, at the base and at the head, can measure in 12 combinations (desktop and phone, light and dark, as loaded, mirrored right to left and with Arabic text), and how fast it loads and what it calls.",
   "on": true,
   "rules": [
     { "id": "physical-side", "name": "A physical side is used where the layout may need to mirror", "ref": "Layout",
@@ -18,6 +18,18 @@
     { "id": "console-error", "name": "The page logs an error", "ref": "Console",
       "sources": ["browser:console"], "bad": "console.error on load", "good": "a quiet console on load" },
     { "id": "network", "name": "A request from the page fails", "ref": "Network",
-      "sources": ["browser:network"], "bad": "404 /api/cart", "good": "every request the page makes succeeds" }
+      "sources": ["browser:network"], "bad": "404 /api/cart", "good": "every request the page makes succeeds" },
+    { "id": "console-warning", "name": "The page logs a new warning", "ref": "Console",
+      "sources": ["browser:warning"], "bad": "console.warn on load", "good": "a quiet console on load" },
+    { "id": "duplicate-id", "name": "An id is used more than once", "ref": "Measured",
+      "sources": ["browser:dupid"], "langs": ["HTML", "Vue", "Svelte", "JavaScript", "TypeScript"], "bad": "two elements with id=\"email\"", "good": "one element per id, so a label or an aria reference finds the right one" },
+    { "id": "calls-more", "name": "The page calls the same thing more often", "ref": "Network",
+      "sources": ["browser:calls"], "langs": ["JavaScript", "TypeScript", "Vue", "Svelte"], "bad": "GET /api/cart twice on load", "good": "each call once, or a reason for more" },
+    { "id": "untranslated", "name": "Text that isn't in the translation files", "ref": "Measured",
+      "sources": ["browser:untranslated"], "langs": ["HTML", "Vue", "Svelte", "JavaScript", "TypeScript"], "bad": "<button>Place order</button> in a project with locales/", "good": "<button>{t('cart.placeOrder')}</button>" },
+    { "id": "slower", "name": "The page loads clearly slower", "ref": "Measured",
+      "sources": ["browser:slow"], "bad": "largest paint 1.2 s → 1.9 s", "good": "about as fast as before" },
+    { "id": "heavier", "name": "The page loads clearly more script", "ref": "Measured",
+      "sources": ["browser:heavy"], "bad": "JavaScript 410 KB → 520 KB", "good": "about as much as before, or a reason for more" }
   ]
 }

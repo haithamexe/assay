@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { killTree } from '@haithamexe/plainkit/process';
 import { redactSecrets } from '../checks/secrets.js';
 import { assayPath, sha, writeFileAtomic } from '../config.js';
 import { repoKey } from '../git.js';
@@ -73,20 +74,15 @@ export interface RunResult extends ParsedRun {
   /** The last lines of output, secrets masked, for showing why a run failed. */
   tail: string;
   error?: string;
+  /** What the command wrote to stdout, only when asked for (`keepStdout`), capped like the rest. Not masked: the caller reads it as a report. */
+  stdout?: string;
 }
 
-export function killTree(child: ChildProcess): void {
-  if (!child.pid) return;
-  if (process.platform === 'win32') {
-    try { spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch { /* already gone */ }
-  } else {
-    try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
-  }
-}
+export { killTree };
 
 const MAX_OUTPUT = 8 * 1024 * 1024;
 
-export function runCommand(cmd: TestCommand, cwd: string, opts: { timeoutSec: number; signal?: AbortSignal }): Promise<RunResult> {
+export function runCommand(cmd: TestCommand, cwd: string, opts: { timeoutSec: number; signal?: AbortSignal; keepStdout?: boolean }): Promise<RunResult> {
   return new Promise(resolve => {
     const env: Record<string, string | undefined> = { ...process.env, ...cmd.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', ASSAY_RUN: '1' };
     // A node --test run started from inside another node --test run would think it is a child of it and print the wrong format.
@@ -105,7 +101,10 @@ export function runCommand(cmd: TestCommand, cwd: string, opts: { timeoutSec: nu
     const chunks: Buffer[] = [];
     let size = 0;
     const take = (b: Buffer): void => { if (size < MAX_OUTPUT) { chunks.push(b); size += b.length; } };
+    const outChunks: Buffer[] = [];
+    let outSize = 0;
     child.stdout?.on('data', take);
+    if (opts.keepStdout) child.stdout?.on('data', (b: Buffer) => { if (outSize < MAX_OUTPUT) { outChunks.push(b); outSize += b.length; } });
     child.stderr?.on('data', take);
     let timedOut = false;
     let spawnError: string | undefined;
@@ -120,7 +119,7 @@ export function runCommand(cmd: TestCommand, cwd: string, opts: { timeoutSec: nu
       const output = Buffer.concat(chunks).toString('utf8');
       const parsed = parseTestOutput(output, cwd);
       const tail = output.split(/\r?\n/).filter(l => l.trim()).slice(-30).map(l => redactSecrets(l.length > 300 ? `${l.slice(0, 299)}…` : l)).join('\n');
-      resolve({ exit: code, timedOut, secs: Math.round((Date.now() - started) / 100) / 10, ...parsed, tail, error: spawnError });
+      resolve({ exit: code, timedOut, secs: Math.round((Date.now() - started) / 100) / 10, ...parsed, tail, error: spawnError, ...(opts.keepStdout ? { stdout: Buffer.concat(outChunks).toString('utf8') } : {}) });
     });
   });
 }

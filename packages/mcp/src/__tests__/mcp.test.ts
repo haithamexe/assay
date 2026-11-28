@@ -47,7 +47,7 @@ const call = async (name: string, args: Record<string, unknown> = {}): Promise<{
 test('the server says what it is for, and lists its tools', async () => {
   assert.match(client.getInstructions() ?? '', /before you say you are done/);
   const names = (await client.listTools()).tools.map(t => t.name).sort();
-  assert.deepEqual(names, ['brief', 'case_findings', 'case_open', 'evidence_replay', 'finding_get', 'finding_resolve', 'finding_submit', 'look', 'memory', 'prove', 'reviewer_brief', 'reviewers_plan', 'timeline']);
+  assert.deepEqual(names, ['attack', 'brief', 'case_findings', 'case_open', 'checkup', 'evidence_replay', 'finding_get', 'finding_resolve', 'finding_submit', 'gremlins', 'look', 'memory', 'prove', 'reviewer_brief', 'reviewers_plan', 'test', 'timeline', 'try']);
   assert.ok(!names.some(n => /allow/.test(n)), 'there is no tool that turns running on: only a person can');
   assert.ok(!names.some(n => /memory_/.test(n)), 'memory is one read only tool: an agent can’t add, switch off or forget');
 });
@@ -85,6 +85,98 @@ test('prove runs the project’s own tests once a person has allowed it, and pro
   assert.match(r.text, /Blocked: 1 proven problem/);
   assert.equal(r.data.tone, 'blocked');
   assert.ok(r.text.length < 3000, 'answers stay short');
+
+  // test: the same project's tests once, at its head, each failure with its file and line
+  const t = await call('test', { repo: proj });
+  assert.equal(t.isError, false, t.text);
+  assert.match(t.text, /^Failed: 0 passed, 1 failed/);
+  assert.match(t.text, /✗ add adds two numbers {2}test\/add\.test\.js:4/);
+  assert.deepEqual([t.data.ok, t.data.failed, t.data.where, t.data.failures[0].file], [false, 1, 'copy', 'test/add.test.js']);
+  const here = await call('test', { repo: proj, here: true });
+  assert.equal(here.isError, true);
+  assert.match(here.text, /assay allow-run --here/, 'the folder needs its own yes, which an agent can’t give');
+});
+
+test('test is refused until a person allows running', async () => {
+  const r = await call('test');
+  assert.equal(r.isError, true);
+  assert.match(r.text, /assay allow-run/);
+});
+
+test('attack is refused until a person allows running, takes no session from the agent, and says when nothing answers', async () => {
+  const refused = await call('attack', { url: 'http://127.0.0.1:1' });
+  assert.equal(refused.isError, true);
+  assert.match(refused.text, /assay allow-run/);
+  assert.ok(!Object.keys((await client.listTools()).tools.find(t => t.name === 'attack')!.inputSchema.properties ?? {}).some(k => /cookie|session|authorization|token/i.test(k)), 'an agent can’t hand it a session');
+  const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'assay-mcp-attack-'));
+  const pg = (...a: string[]): string => execFileSync('git', ['-C', proj, ...a], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
+  pg('init', '-q', '-b', 'main'); pg('config', 'commit.gpgsign', 'false');
+  fs.writeFileSync(path.join(proj, 'README.md'), '# p\n');
+  pg('add', '-A'); pg('commit', '-q', '-m', 'Base');
+  process.env.ASSAY_HOME = home;
+  const core = await import('@assay/core');
+  core.setRepoSettings(proj, { allow: true });
+  const bad = await call('attack', { repo: proj, url: 'http://example.com' });
+  assert.equal(bad.isError, true);
+  assert.match(bad.text, /running on this computer/);
+  const writes = await call('attack', { repo: proj, url: 'http://127.0.0.1:1', writes: true });
+  assert.equal(writes.isError, true);
+  assert.match(writes.text, /assay allow-run --writes/, 'an agent can’t turn the data-changing checks on');
+  const r = await call('attack', { repo: proj, url: 'http://127.0.0.1:1', browser: false });
+  assert.equal(r.isError, false, r.text);
+  assert.match(r.text, /0 proven/);
+  assert.match(r.text, /Nothing answered/);
+  assert.deepEqual([r.data.schema, r.data.writes], ['assay.attack/1', false]);
+});
+
+test('try is refused until a person allows running and the registry, takes nothing that runs install scripts, and checks the package before reaching for it', async () => {
+  const refused = await call('try', { package: 'react' });
+  assert.equal(refused.isError, true);
+  assert.match(refused.text, /assay allow-run/);
+  assert.deepEqual(Object.keys((await client.listTools()).tools.find(t => t.name === 'try')!.inputSchema.properties ?? {}).sort(), ['browser', 'package', 'pages', 'ref', 'repo', 'tests', 'version'], 'no argument lets install scripts run or turns the registry on');
+  const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'assay-mcp-try-'));
+  const pg = (...a: string[]): string => execFileSync('git', ['-C', proj, ...a], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
+  pg('init', '-q', '-b', 'main'); pg('config', 'commit.gpgsign', 'false');
+  fs.writeFileSync(path.join(proj, 'package.json'), JSON.stringify({ name: 'p', version: '1.0.0', dependencies: { left: '1.0.0' } }));
+  pg('add', '-A'); pg('commit', '-q', '-m', 'Base');
+  process.env.ASSAY_HOME = home;
+  const core = await import('@assay/core');
+  core.setRepoSettings(proj, { allow: true });
+  const noNet = await call('try', { repo: proj, package: 'left' });
+  assert.equal(noNet.isError, true);
+  assert.match(noNet.text, /assay allow-run --network/, 'an agent can’t let the package manager reach its registry');
+  core.setRepoSettings(proj, { network: true });
+  const bad = await call('try', { repo: proj, package: 'react; ls' });
+  assert.equal(bad.isError, true);
+  assert.match(bad.text, /isn’t a package name/);
+  const none = await call('try', { repo: proj, package: 'right' });
+  assert.equal(none.isError, true);
+  assert.match(none.text, /isn’t one of the project’s dependencies/);
+});
+
+test('gremlins are refused until a person allows running and gives their own yes for data-changing checks, and an agent can’t pass a session', async () => {
+  const refused = await call('gremlins', { url: 'http://127.0.0.1:1' });
+  assert.equal(refused.isError, true);
+  assert.match(refused.text, /assay allow-run/);
+  assert.ok(!Object.keys((await client.listTools()).tools.find(t => t.name === 'gremlins')!.inputSchema.properties ?? {}).some(k => /cookie|session|authorization|token|writes/i.test(k)), 'there is nothing to pass that turns it on');
+  const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'assay-mcp-gremlins-'));
+  const pg = (...a: string[]): string => execFileSync('git', ['-C', proj, ...a], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
+  pg('init', '-q', '-b', 'main'); pg('config', 'commit.gpgsign', 'false');
+  fs.writeFileSync(path.join(proj, 'README.md'), '# p\n');
+  pg('add', '-A'); pg('commit', '-q', '-m', 'Base');
+  process.env.ASSAY_HOME = home;
+  const core = await import('@assay/core');
+  core.setRepoSettings(proj, { allow: true });
+  const noWrites = await call('gremlins', { repo: proj, url: 'http://127.0.0.1:1' });
+  assert.equal(noWrites.isError, true);
+  assert.match(noWrites.text, /assay allow-run --writes/, 'an agent can’t turn the data-changing checks on');
+  core.setRepoSettings(proj, { writes: true });
+  const bad = await call('gremlins', { repo: proj, url: 'http://example.com' });
+  assert.equal(bad.isError, true);
+  assert.match(bad.text, /running on this computer/);
+  const both = await call('gremlins', { repo: proj, url: 'http://127.0.0.1:1', base: 'HEAD' });
+  assert.equal(both.isError, true);
+  assert.match(both.text, /one or the other/);
 });
 
 let caseId = '';
@@ -268,4 +360,22 @@ const hasBrowser = !!(await import('@assay/core')).findBrowser();
   const g = await call('finding_get', { case: opened.data.case, id: r.data.findings.find((f: any) => /overlap/.test(f.title))?.id ?? r.text.match(/(f-[0-9a-f]{8})/)![1] });
   assert.match(g.text, /measurement/);
   assert.match(g.text, /right:12px/);
+});
+
+test('checkup looks at the project as it is, says what is new, and refuses an address off this computer', async () => {
+  const r = await call('checkup', { pages: ['/'] });
+  assert.equal(r.isError, false, r.text);
+  assert.match(r.text, /checkup ck-\d{14}-[0-9a-f]{6}/);
+  assert.match(r.text, /AWS access key id in settings\.py/);
+  assert.match(r.text, /First checkup/);
+  assert.ok(!r.text.includes('QWERTYUIOP123456'));
+  assert.equal(r.data.schema, 'assay.checkup/1');
+  assert.equal(r.data.tone, 'act');
+  assert.equal(r.data.pages, 1);
+  const again = await call('checkup', { only: 'secrets' });
+  assert.match(again.text, /already there/);
+  assert.equal(again.data.pages, null, 'only the one check: no list of pages');
+  const bad = await call('checkup', { url: 'http://example.com' });
+  assert.equal(bad.isError, true);
+  assert.match(bad.text, /running on this computer/);
 });
