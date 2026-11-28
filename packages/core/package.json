@@ -1,6 +1,6 @@
 {
   "name": "@assay/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "The engine: git facts, free checks, evidence, the gate, cases. Only Node and plainkit (our own zero-dependency kit).",

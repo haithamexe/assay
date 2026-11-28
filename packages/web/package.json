@@ -1,6 +1,6 @@
 {
   "name": "@assay/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "The dashboard: the demo's screens on real cases. node:http on the loopback address, a token and a strict CSP. No dependencies but the core.",

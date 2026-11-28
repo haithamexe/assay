@@ -4,9 +4,9 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ## Unreleased
 
-### Changed
+## 0.2.0 — 2026-11-28
 
-- **`assay look --json` names its contract and lists the findings.** The answer now starts with `schema: "assay.look/1"` and carries the browser findings (title, severity, tier, file, line, what was observed) next to the report's counts, so another tool can show what the pages did without reading the case. Only fields were added.
+Project mode and the checks that sister tools handed over: a checkup of the project as it is, `assay test`, the page checks that moved into `look`, untranslated text, `assay attack`, `assay gremlins` and `assay try`, each with a CLI command, an MCP tool and a versioned JSON answer. The shared kit is now `@haithamexe/plainkit` from npm, so a clone installs. Tools that used to carry these checks now hand them to Assay.
 
 ### Fixed
 
@@ -74,6 +74,7 @@ All notable changes. Back to the [README](README.md). The format follows [Keep a
 
 ### Changed
 - The DevTools pipe client, the browser search, atomic writes, the home folder and stopping a process tree now come from **plainkit**, a small library with no dependencies that sister tools share (D58). npm installs it with Assay; nothing else changes for you. `CHROME_PATH` now points Assay at a browser too, after `ASSAY_BROWSER`. The YAML reader for OpenAPI files comes from plainkit as well.
+- **`assay look --json` names its contract and lists the findings.** The answer now starts with `schema: "assay.look/1"` and carries the browser findings (title, severity, tier, file, line, what was observed) next to the report's counts, so another tool can show what the pages did without reading the case. Only fields were added.
 
 ## 0.1.0 — 2026-11-27
 

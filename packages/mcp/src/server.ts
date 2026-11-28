@@ -173,7 +173,7 @@ function detail(f: Finding, c: Case): string {
   return l.join('\n');
 }
 
-export function createServer(version = '0.1.0'): McpServer {
+export function createServer(version = '0.2.0'): McpServer {
   const server = new McpServer({ name: 'assay', version }, { instructions: INSTRUCTIONS });
   const repoArg = z.string().optional().describe('The repository folder. Default: the folder this server was started in.');
 

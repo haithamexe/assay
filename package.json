@@ -1,6 +1,6 @@
 {
   "name": "assay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "Evidence-first code review: free checks, blind reviewers, nothing counts without proof.",

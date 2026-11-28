@@ -1,6 +1,6 @@
 {
   "name": "@assay/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "MCP server: lets an agent open cases, read ranked findings and submit evidence-gated claims.",
